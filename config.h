@@ -169,8 +169,8 @@ static const Key keys[] = {
 #endif
 	{ MODKEY,                       XK_j,      niri_focusstack, {.i = +1 } },
 	{ MODKEY,                       XK_k,      niri_focusstack, {.i = -1 } },
-	{ MODKEY,                       XK_i,      incnmaster,     {.i = +1 } },
-	{ MODKEY,                       XK_d,      incnmaster,     {.i = -1 } },
+ 	{ MODKEY,                       XK_i,      niri_incnmaster, {.i = +1 } },
+ 	{ MODKEY,                       XK_d,      niri_incnmaster, {.i = -1 } },
  	{ MODKEY,                       XK_h,      niri_zoom,      {.i = +1 } },
  	{ MODKEY,                       XK_l,      niri_zoom,      {.i = -1 } },
 	{ MODKEY,                       XK_Return, swapmaster,     {0} }, /* vxwm has no zoom(); swapmaster is the equivalent of dwm's zoom */

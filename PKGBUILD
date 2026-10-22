@@ -49,5 +49,5 @@ md5sums=('SKIP'
          'f187782edcd0e11ddc17fa5802c38c4a'
          '6c1152a2522a5d618d6483987c6e2220'
          '6da8d82288d09f493e1e0c4347e939d8'
-         '72abfd7924bde6b75acc36f9996e2b31'
-         '5cc5923bbeb8641fc56775537a211acd')
+         'ca4b4b9bc03921bcdeb03cdbe2cffa63'
+         '6271a2867ad625aa7e06f97e95a9cc02')
