@@ -14,8 +14,8 @@ static const char *fonts[]          = { "JetBrains Mono Nerd Font:size=16" };
 static const char dmenufont[]       = "JetBrains Mono Nerd Font:size=16";
 #define COORDINATES_STYLE "[x%d y%d]" /* The style of coordinates displayed in bar, do not remove %d. */
 
-static unsigned int baralpha = 0xf2;
-static unsigned int borderalpha = OPAQUE;
+static unsigned int baralpha = OPAQUE;
+static unsigned int borderalpha = 0xf2;
 
 static MAYBE_CONST char normbgcolor[]           = "#111111";
 static MAYBE_CONST char normbordercolor[]       = "#161616";
@@ -108,11 +108,15 @@ static const int lockfullscreen = 1; /* 1 will force focus on the fullscreen win
 #if LOCK_MOVE_RESIZE_REFRESH_RATE
 static const int refreshrate = 360;  /* refresh rate (per second) for client move/resize, set it to your monitor refresh rate or double of that*/
 #endif //LOCK_MOVE_RESIZE_REFRESH_RATE
+
+#include "niri.c"
+
 static const Layout layouts[] = {
 	/* symbol     arrange function */
   { "><>",      NULL },    /* no layout function means floating behavior */
 	{ "[]=",      tile },    /* first entry is default */
 	{ "[M]",      monocle },
+	{ "[>]",      niri },    /* niri-like layout, scrolls on one axis only */
 };
 
 /* key definitions */
@@ -163,18 +167,19 @@ static const Key keys[] = {
 #if DUALSTATUS
 	{ MODKEY|ShiftMask,             XK_b,      togglebotbar,   {0} },
 #endif
-	{ MODKEY,                       XK_j,      focusstack,     {.i = +1 } },
-	{ MODKEY,                       XK_k,      focusstack,     {.i = -1 } },
+	{ MODKEY,                       XK_j,      niri_focusstack, {.i = +1 } },
+	{ MODKEY,                       XK_k,      niri_focusstack, {.i = -1 } },
 	{ MODKEY,                       XK_i,      incnmaster,     {.i = +1 } },
 	{ MODKEY,                       XK_d,      incnmaster,     {.i = -1 } },
-	{ MODKEY,                       XK_h,      setmfact,       {.f = -0.05} },
-	{ MODKEY,                       XK_l,      setmfact,       {.f = +0.05} },
+ 	{ MODKEY,                       XK_h,      niri_zoom,      {.i = +1 } },
+ 	{ MODKEY,                       XK_l,      niri_zoom,      {.i = -1 } },
 	{ MODKEY,                       XK_Return, swapmaster,     {0} }, /* vxwm has no zoom(); swapmaster is the equivalent of dwm's zoom */
 	{ MODKEY,                       XK_Tab,    view,           {0} },
 	{ MODKEY|ShiftMask,             XK_c,      killclient,     {0} },
 	{ MODKEY,                       XK_t,      setlayout,      {.v = &layouts[1]} }, /* tile (layouts[1] in vxwm == layouts[0] in dwm) */
 	{ MODKEY,                       XK_f,      setlayout,      {.v = &layouts[0]} }, /* floating (layouts[0] in vxwm == layouts[1] in dwm) */
 	{ MODKEY,                       XK_m,      setlayout,      {.v = &layouts[2]} },
+	{ MODKEY,                       XK_n,      setlayout,      {.v = &layouts[3]} },
 	{ MODKEY,                       XK_space,  setlayout,      {0} },
 	{ MODKEY|ShiftMask,             XK_space,  togglefloating, {0} }, //default toggle floating bind.
 	{ MODKEY,                       XK_0,      view,           {.ui = ~0 } },
@@ -225,11 +230,11 @@ static const Key keys[] = {
   { MODKEY|ControlMask,			      XK_Left,	moveresize,		{.v = (int []){ 0, 0, -RESIZE_WITH_KEYBOARD_STEP, 0 }}}, // Resize window
 #endif
 #if INFINITE_TAGS
-  { MODKEY,                       XK_r,      homecanvas,       {0} }, // Return to x:0, y:0 position
-  { MODKEY|ShiftMask,             XK_Left,   movecanvas,       {.i = 0} }, // Move your position to left
-  { MODKEY|ShiftMask,             XK_Right,  movecanvas,       {.i = 1} }, // Move your position to right
-  { MODKEY|ShiftMask,             XK_Up,     movecanvas,       {.i = 2} }, // Move your position up
-  { MODKEY|ShiftMask,             XK_Down,   movecanvas,       {.i = 3} }, // Move your position down
+  { MODKEY,                       XK_r,      niri_home,        {0} }, // Return to x:0, y:0 position
+  { MODKEY|ShiftMask,             XK_Left,   niri_scroll,      {.i = 0} }, // Move your position to left
+  { MODKEY|ShiftMask,             XK_Right,  niri_scroll,      {.i = 1} }, // Move your position to right
+  { MODKEY|ShiftMask,             XK_Up,     niri_scroll,      {.i = 2} }, // Move your position up
+  { MODKEY|ShiftMask,             XK_Down,   niri_scroll,      {.i = 3} }, // Move your position down
   { MODKEY|ShiftMask,             XK_d,      centerwindow,     {0} },
   { MODKEY|ControlMask,           XK_z,      pinwindow,        {0} },
 #endif
@@ -268,6 +273,7 @@ static const Button buttons[] = {
 	{ ClkLtSymbol,          0,              Button3,        setlayout,      {.v = &layouts[2]} },
 	{ ClkWinTitle,          0,              Button2,        swapmaster,     {0} },
 	{ ClkStatusText,        0,              Button2,        spawn,          {.v = termcmd } },
+	{ ClkClientWin,         0,              Button1,        niri_arrange,   {0} },
 	{ ClkClientWin,         MODKEY,         Button1,        movemouse,      {0} },
 	{ ClkClientWin,         MODKEY,         Button2,        togglefloating, {0} },
 	{ ClkClientWin,         MODKEY,         Button3,        resizemouse,    {0} },

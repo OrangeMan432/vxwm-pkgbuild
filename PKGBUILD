@@ -12,7 +12,8 @@ source=(git+https://github.com/orangeman432/vxwm.git
 	vxwm.desktop
 	start-vxwm
 	modules.h
-	config.h)
+	config.h
+	niri.c)
 source=(${source[@]} ${_patches[@]})
 
 build() {
@@ -26,6 +27,7 @@ build() {
 
   cp $srcdir/modules.h modules.h
   cp $srcdir/config.h config.h
+  cp $srcdir/niri.c niri.c
 
   sed -i 's/CPPFLAGS =/CPPFLAGS +=/g' config.mk
   sed -i 's/^CFLAGS = -g/#CFLAGS += -g/g' config.mk
@@ -47,4 +49,5 @@ md5sums=('SKIP'
          'f187782edcd0e11ddc17fa5802c38c4a'
          '6c1152a2522a5d618d6483987c6e2220'
          '6da8d82288d09f493e1e0c4347e939d8'
-         '1b824ed6d07480c79aaf1cda02220914')
+         '72abfd7924bde6b75acc36f9996e2b31'
+         '5cc5923bbeb8641fc56775537a211acd')
