@@ -1,0 +1,6 @@
+pkg/*
+src/*
+vxwm/*
+*.tar.gz
+*.tar.xz
+*.tar.zst

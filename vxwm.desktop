@@ -1,0 +1,7 @@
+[Desktop Entry]
+Encoding=UTF-8
+Name=Vxwm Session
+Comment=Versatile X Window Manager
+Exec=start-vxwm
+Icon=vxwm
+Type=XSession
