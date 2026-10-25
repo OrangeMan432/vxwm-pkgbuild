@@ -42,10 +42,10 @@ static const int user_bh = 40;
 #endif
 
 #if BAR_PADDING
-static const int top_vertpad = (topbar || DUALSTATUS) ? (gappx + (STATUSBARBORDER ? borderpx : 0)) : 0;    /* top vertical padding of bar */
-static const int bottom_vertpad = (!topbar || DUALSTATUS) ? (gappx + (STATUSBARBORDER ? borderpx : 0)) : 0; /* bottom vertical padding of bar */
-static const int left_sidepad = gappx + (STATUSBARBORDER ? borderpx : 0);                     /* left horizontal padding of bar */
-static const int right_sidepad = gappx + (STATUSBARBORDER ? borderpx : 0);                    /* right horizontal padding of bar */
+static const int top_vertpad = (topbar || DUALSTATUS) ? (gappx + (STATUSBARBORDER ? borderpx : 0)) : 0;        /* top vertical padding of bar */
+static const int bottom_vertpad = (!topbar || DUALSTATUS) ? (gappx + (STATUSBARBORDER ? borderpx : 0)) : 0;    /* bottom vertical padding of bar */
+static const int left_sidepad = gappx + (STATUSBARBORDER ? borderpx : 0);                                      /* left horizontal padding of bar */
+static const int right_sidepad = gappx + (STATUSBARBORDER ? borderpx : 0);                                     /* right horizontal padding of bar */
 #endif
 
 #define BAR_ALWAYS_ON_TOP 1 /* Makes internal bar on top of other windows. */
@@ -114,7 +114,7 @@ static const int refreshrate = 360;  /* refresh rate (per second) for client mov
 
 static const Layout layouts[] = {
 	/* symbol     arrange function */
-  { "><>",      NULL },    /* no layout function means floating behavior */
+	{ "><>",      NULL },    /* no layout function means floating behavior */
 	{ "[]=",      tile },    /* first entry is default */
 	{ "[M]",      monocle },
 	{ "[>]",      niri },    /* niri-like layout, scrolls on one axis only */
@@ -159,7 +159,7 @@ static const char *zoomreset[] = { "vcompmgr", "-Z", "1", NULL }; // set zoom to
 static const Key keys[] = {
 	/* modifier                     key        function        argument */
 	{ MODKEY,                       XK_p,      spawn,          {.v = dmenucmd } },
- 	{ MODKEY|ShiftMask,             XK_Return, spawn,          {.v = termcmd } },
+	{ MODKEY|ShiftMask,             XK_Return, spawn,          {.v = termcmd } },
 	{ 0,                            XF86XK_Launch1, spawn,     {.v = scriptmenucmd } },
 	{ MODKEY|ShiftMask,             XK_l,      spawn,          {.v = lockcmd } },
 	{ MODKEY,                       XK_y,      spawn,          SHCMD("/usr/bin/dwm-tabs.sh attach") },
@@ -170,10 +170,10 @@ static const Key keys[] = {
 #endif
 	{ MODKEY,                       XK_j,      niri_focusstack, {.i = +1 } },
 	{ MODKEY,                       XK_k,      niri_focusstack, {.i = -1 } },
- 	{ MODKEY,                       XK_i,      niri_incnmaster, {.i = +1 } },
- 	{ MODKEY,                       XK_d,      niri_incnmaster, {.i = -1 } },
- 	{ MODKEY,                       XK_h,      niri_zoom,      {.i = +1 } },
- 	{ MODKEY,                       XK_l,      niri_zoom,      {.i = -1 } },
+	{ MODKEY,                       XK_i,      niri_incnmaster, {.i = +1 } },
+	{ MODKEY,                       XK_d,      niri_incnmaster, {.i = -1 } },
+	{ MODKEY,                       XK_h,      niri_zoom,      {.i = +1 } },
+	{ MODKEY,                       XK_l,      niri_zoom,      {.i = -1 } },
 	{ MODKEY,                       XK_Return, swapmaster,     {0} }, /* vxwm has no zoom(); swapmaster is the equivalent of dwm's zoom */
 	{ MODKEY,                       XK_Tab,    view,           {0} },
 	{ MODKEY|ShiftMask,             XK_c,      killclient,     {0} },
@@ -207,37 +207,37 @@ static const Key keys[] = {
 	TAGKEYS(                        XK_9,                      8)
 	{ MODKEY|ShiftMask,             XK_q,      quit,           {0} },
 #if XRDB
-  { MODKEY,                       XK_F5,     xrdb,           {.v = NULL } },
+	{ MODKEY,                       XK_F5,     xrdb,           {.v = NULL } },
 #endif
 #if FULLSCREEN
-  { MODKEY|ShiftMask,             XK_f,      togglefullscr,  {0} },
+	{ MODKEY|ShiftMask,             XK_f,      togglefullscr,  {0} },
 #endif
 #if ENHANCED_TOGGLE_FLOATING
-  { MODKEY,                       XK_q,      enhancedtogglefloating, {0} }, //enhanced toggle floating bind.
+	{ MODKEY,                       XK_q,      enhancedtogglefloating, {0} }, //enhanced toggle floating bind.
 #endif
 #if GAPS
-  { MODKEY,                       XK_minus,  setgaps,        {.i = -1 } },
-  { MODKEY,                       XK_equal,  setgaps,        {.i = +1 } },
-  { MODKEY|ShiftMask,             XK_equal,  setgaps,        {.i = 0  } },
+	{ MODKEY,                       XK_minus,  setgaps,        {.i = -1 } },
+	{ MODKEY,                       XK_equal,  setgaps,        {.i = +1 } },
+	{ MODKEY|ShiftMask,             XK_equal,  setgaps,        {.i = 0  } },
 #endif
 #if MOVE_RESIZE_WITH_KEYBOARD
-  { MODKEY,					              XK_Down,	moveresize,		{.v = (int []){ 0, MOVE_WITH_KEYBOARD_STEP, 0, 0 }}}, // Move window to down
-  { MODKEY,					              XK_Up,		moveresize,		{.v = (int []){ 0, -MOVE_WITH_KEYBOARD_STEP, 0, 0 }}}, // Move window to up
-  { MODKEY,					              XK_Right,	moveresize,		{.v = (int []){ MOVE_WITH_KEYBOARD_STEP, 0, 0, 0 }}}, // Move window to right
-  { MODKEY,					              XK_Left,	moveresize,		{.v = (int []){ -MOVE_WITH_KEYBOARD_STEP, 0, 0, 0 }}}, // Move window to left
-  { MODKEY|ControlMask,			      XK_Down,	moveresize,		{.v = (int []){ 0, 0, 0, RESIZE_WITH_KEYBOARD_STEP }}}, // Resize window
-  { MODKEY|ControlMask,			      XK_Up,		moveresize,		{.v = (int []){ 0, 0, 0, -RESIZE_WITH_KEYBOARD_STEP }}}, // Resize window
-  { MODKEY|ControlMask,			      XK_Right,	moveresize,		{.v = (int []){ 0, 0, RESIZE_WITH_KEYBOARD_STEP, 0 }}}, // Resize window
-  { MODKEY|ControlMask,			      XK_Left,	moveresize,		{.v = (int []){ 0, 0, -RESIZE_WITH_KEYBOARD_STEP, 0 }}}, // Resize window
+	{ MODKEY,					          XK_Down,	moveresize,		{.v = (int []){ 0, MOVE_WITH_KEYBOARD_STEP, 0, 0 }}}, // Move window to down
+	{ MODKEY,					          XK_Up,	moveresize,		{.v = (int []){ 0, -MOVE_WITH_KEYBOARD_STEP, 0, 0 }}}, // Move window to up
+	{ MODKEY,					          XK_Right,	moveresize,		{.v = (int []){ MOVE_WITH_KEYBOARD_STEP, 0, 0, 0 }}}, // Move window to right
+	{ MODKEY,					          XK_Left,	moveresize,		{.v = (int []){ -MOVE_WITH_KEYBOARD_STEP, 0, 0, 0 }}}, // Move window to left
+	{ MODKEY|ControlMask,			      XK_Down,	moveresize,		{.v = (int []){ 0, 0, 0, RESIZE_WITH_KEYBOARD_STEP }}}, // Resize window
+	{ MODKEY|ControlMask,			      XK_Up,	moveresize,		{.v = (int []){ 0, 0, 0, -RESIZE_WITH_KEYBOARD_STEP }}}, // Resize window
+	{ MODKEY|ControlMask,			      XK_Right,	moveresize,		{.v = (int []){ 0, 0, RESIZE_WITH_KEYBOARD_STEP, 0 }}}, // Resize window
+	{ MODKEY|ControlMask,			      XK_Left,	moveresize,		{.v = (int []){ 0, 0, -RESIZE_WITH_KEYBOARD_STEP, 0 }}}, // Resize window
 #endif
 #if INFINITE_TAGS
-  { MODKEY,                       XK_r,      niri_home,        {0} }, // Return to x:0, y:0 position
-  { MODKEY|ShiftMask,             XK_Left,   niri_scroll,      {.i = 0} }, // Move your position to left
-  { MODKEY|ShiftMask,             XK_Right,  niri_scroll,      {.i = 1} }, // Move your position to right
-  { MODKEY|ShiftMask,             XK_Up,     niri_scroll,      {.i = 2} }, // Move your position up
-  { MODKEY|ShiftMask,             XK_Down,   niri_scroll,      {.i = 3} }, // Move your position down
-  { MODKEY|ShiftMask,             XK_d,      centerwindow,     {0} },
-  { MODKEY|ControlMask,           XK_z,      pinwindow,        {0} },
+	{ MODKEY,                       XK_r,      niri_home,        {0} }, // Return to x:0, y:0 position
+	{ MODKEY|ShiftMask,             XK_Left,   niri_scroll,      {.i = 0} }, // Move your position to left
+	{ MODKEY|ShiftMask,             XK_Right,  niri_scroll,      {.i = 1} }, // Move your position to right
+	{ MODKEY|ShiftMask,             XK_Up,     niri_scroll,      {.i = 2} }, // Move your position up
+	{ MODKEY|ShiftMask,             XK_Down,   niri_scroll,      {.i = 3} }, // Move your position down
+	{ MODKEY|ShiftMask,             XK_d,      centerwindow,     {0} },
+	{ MODKEY|ControlMask,           XK_z,      pinwindow,        {0} },
 #endif
 #if DIRECTIONAL_FOCUS
 	{ ALTERNATE_MODKEY,             XK_Left,   focusdir,       {.i = 0 } }, // left
@@ -246,9 +246,9 @@ static const Key keys[] = {
 	{ ALTERNATE_MODKEY,             XK_Down,   focusdir,       {.i = 3 } }, // down
 #endif
 #if ZOOM
- { ALTERNATE_MODKEY,              XK_r,      spawn,          {.v = zoomreset } },
- { MODKEY,                        XK_equal,  spawn,          {.v = zoomin } },
- { MODKEY,                        XK_minus,  spawn,          {.v = zoomout } },
+	{ ALTERNATE_MODKEY,              XK_r,      spawn,          {.v = zoomreset } },
+	{ MODKEY,                        XK_equal,  spawn,          {.v = zoomin } },
+	{ MODKEY,                        XK_minus,  spawn,          {.v = zoomout } },
 #endif
 };
 
@@ -257,18 +257,18 @@ static const Key keys[] = {
 static const Button buttons[] = {
 	/* click                event mask      button          function        argument */
 #if INFINITE_TAGS
-  { ClkRootWin,           MODKEY|ShiftMask,         Button1,        movecanvasmouse,     {.f = 1.5 } }, 
-  { ClkClientWin,         MODKEY|ShiftMask,         Button1,        movecanvasmouse,     {.f = 1.5 } },
-  { ClkRootWin,           0,                        Button1,        movecanvasmouse,     {.f = 1.5 } },
-  /* .f = 1 is moving multiplier, for example if set to 0.5, canvas will move 2 times slower, if set to 2, canvas will move 2 times faster. 
+	{ ClkRootWin,           MODKEY|ShiftMask,         Button1,        movecanvasmouse,     {.f = 1.5 } },
+	{ ClkClientWin,         MODKEY|ShiftMask,         Button1,        movecanvasmouse,     {.f = 1.5 } },
+	{ ClkRootWin,           0,                        Button1,        movecanvasmouse,     {.f = 1.5 } },
+	/* .f = 1 is moving multiplier, for example if set to 0.5, canvas will move 2 times slower, if set to 2, canvas will move 2 times faster.
      If you want inverted canvas move then set the value to a negative value. */
 #endif
 #if ZOOM
-  { ClkRootWin,           MODKEY,         SCROLL_UP,      spawn,          {.v = zoomin } },
-  { ClkRootWin,           MODKEY,         SCROLL_DOWN,    spawn,          {.v = zoomout } },
+	{ ClkRootWin,           MODKEY,         SCROLL_UP,      spawn,          {.v = zoomin } },
+	{ ClkRootWin,           MODKEY,         SCROLL_DOWN,    spawn,          {.v = zoomout } },
 
-  { ClkClientWin,         MODKEY,         SCROLL_UP,      spawn,          {.v = zoomin } },
-  { ClkClientWin,         MODKEY,         SCROLL_DOWN,    spawn,          {.v = zoomout } },
+	{ ClkClientWin,         MODKEY,         SCROLL_UP,      spawn,          {.v = zoomin } },
+	{ ClkClientWin,         MODKEY,         SCROLL_DOWN,    spawn,          {.v = zoomout } },
 #endif
 	{ ClkLtSymbol,          0,              Button1,        setlayout,      {0} },
 	{ ClkLtSymbol,          0,              Button3,        setlayout,      {.v = &layouts[2]} },
