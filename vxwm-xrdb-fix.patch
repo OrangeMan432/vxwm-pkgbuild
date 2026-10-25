@@ -1,0 +1,15 @@
+--- modules/xrdb/xrdb.c
++++ modules/xrdb/xrdb.c
+@@ -22,6 +22,12 @@
+         XRDB_LOAD_COLOR("dwm.color6", normfgcolor);
+         XRDB_LOAD_COLOR("dwm.color0", selfgcolor);
+         XRDB_LOAD_COLOR("dwm.color6", selbgcolor);
++        XRDB_LOAD_COLOR("dwm.normbordercolor", normbordercolor);
++        XRDB_LOAD_COLOR("dwm.selbordercolor", selbordercolor);
++        XRDB_LOAD_COLOR("dwm.normbgcolor", normbgcolor);
++        XRDB_LOAD_COLOR("dwm.normfgcolor", normfgcolor);
++        XRDB_LOAD_COLOR("dwm.selfgcolor", selfgcolor);
++        XRDB_LOAD_COLOR("dwm.selbgcolor", selbgcolor);
+       }
+     }
+   }

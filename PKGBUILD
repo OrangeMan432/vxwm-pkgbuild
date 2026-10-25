@@ -8,6 +8,7 @@ license=('MIT')
 options=(zipman)
 depends=('libx11' 'libxinerama')
 install=vxwm.install
+_patches=('vxwm-xrdb-fix.patch')
 source=(git+https://github.com/orangeman432/vxwm.git
 	vxwm.desktop
 	start-vxwm
@@ -22,7 +23,7 @@ build() {
 
   for p in "${_patches[@]}"; do
     echo "=> $p"
-    patch < ../$p || return 1
+    patch -p0 < ../$p || return 1
   done
 
   cp $srcdir/modules.h modules.h
@@ -50,4 +51,5 @@ md5sums=('SKIP'
          '6c1152a2522a5d618d6483987c6e2220'
          '6da8d82288d09f493e1e0c4347e939d8'
          'c94cc6f8223d6ca57a24beb5f45e3f31'
-         'd03c4767e35c025eef93ab5a790d8cfd')
+         'd03c4767e35c025eef93ab5a790d8cfd'
+         'a7e862491c1e94887913a2e47755eb3a')
