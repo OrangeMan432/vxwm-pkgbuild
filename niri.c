@@ -528,12 +528,3 @@ niri_focusstack(const Arg *arg)
 	if (selmon && selmon->lt[selmon->sellt]->arrange == niri)
 		arrange(selmon);
 }
-
-/* a click focuses the window before the button binding runs, arrange here to
- * scroll it into view */
-void
-niri_arrange(const Arg *arg)
-{
-	if (selmon && selmon->lt[selmon->sellt]->arrange == niri)
-		arrange(selmon);
-}

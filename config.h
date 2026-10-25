@@ -14,8 +14,9 @@ static const char *fonts[]          = { "JetBrains Mono Nerd Font:size=16" };
 static const char dmenufont[]       = "JetBrains Mono Nerd Font:size=16";
 #define COORDINATES_STYLE "[x%d y%d]" /* The style of coordinates displayed in bar, do not remove %d. */
 
-static unsigned int baralpha = OPAQUE;
-static unsigned int borderalpha = 0xf2;
+/* static unsigned int baralpha = OPAQUE; */
+static unsigned int baralpha = 0xf2;
+static unsigned int borderalpha = OPAQUE;
 
 static MAYBE_CONST char normbgcolor[]           = "#111111";
 static MAYBE_CONST char normbordercolor[]       = "#161616";
@@ -273,7 +274,6 @@ static const Button buttons[] = {
 	{ ClkLtSymbol,          0,              Button3,        setlayout,      {.v = &layouts[2]} },
 	{ ClkWinTitle,          0,              Button2,        swapmaster,     {0} },
 	{ ClkStatusText,        0,              Button2,        spawn,          {.v = termcmd } },
-	{ ClkClientWin,         0,              Button1,        niri_arrange,   {0} },
 	{ ClkClientWin,         MODKEY,         Button1,        movemouse,      {0} },
 	{ ClkClientWin,         MODKEY,         Button2,        togglefloating, {0} },
 	{ ClkClientWin,         MODKEY,         Button3,        resizemouse,    {0} },
