@@ -28,8 +28,12 @@
  *                                          up/down scrolls the focused column
  *                                          one window, the other columns stay
  * The column layout, the scroll offsets and the vertical zoom are stored per
- * tag in a table in this file, the horizontal zoom in mfact so setmfact()
- * persists it.
+ * tag in a table in this file, like pertag does it and only when PERTAG is
+ * enabled; the horizontal zoom stays in mfact so setmfact() persists it. The
+ * table is also mirrored onto the root window, one property per tag, so a
+ * restarted vxwm rebuilds the columns the way they were. That only uses Xlib
+ * and the structures vxwm already has, so this file still works with an
+ * unpatched vxwm (there without the extra tag/monitor restore).
  *
  * The gaps are laid out like tile() does it: gappx between two windows and at
  * the edges, so everything is evenly spaced.
@@ -67,6 +71,9 @@
 
 #define NIRI_SCROLL_STEP 120 /* pixels the view travels per scroll step */
 #define NIRI_MAX 64          /* windows the strip can hold */
+#if PERTAG
+#define NIRI_STATE_VERSION 1
+#endif
 
 /* the windows of the strip in display order, left to right then top to bottom */
 static Client *niri_list[NIRI_MAX];
@@ -89,11 +96,21 @@ struct NiriStrip {
  * The column a window ended up in is not derived from the window list, so the
  * layout remembers it per tag. Windows that are not in the table yet (new
  * ones) open as their own column, windows that are gone are dropped.
+ *
+ * Like pertag the table is only indexed per tag when PERTAG is enabled;
+ * without pertag niri keeps a single layout.
  */
-static struct NiriStrip niri_strip[LENGTH(tags)];
+struct NiriTagState {
+	struct NiriStrip strip;
+	int visy;     /* stacked windows sharing the screen height, 0 is one */
+	int restored; /* has the saved layout of this tag been read back? */
+};
 
-/* how many stacked windows are visible per tag, 0 means the default of one */
-static int niri_visy[LENGTH(tags)];
+#if PERTAG
+static struct NiriTagState niri_tagstate[LENGTH(tags)];
+#else
+static struct NiriTagState niri_tagstate[1];
+#endif
 
 /* index of the tag the monitor is currently showing */
 static int
@@ -105,6 +122,208 @@ niri_tag(Monitor *m)
 		;
 	return i < LENGTH(tags) ? i : 0;
 }
+
+/* the layout state of the current tag */
+static struct NiriTagState *
+niri_state_of(Monitor *m)
+{
+#if PERTAG
+	return &niri_tagstate[niri_tag(m)];
+#else
+	(void)m;
+	return &niri_tagstate[0];
+#endif
+}
+
+#if PERTAG
+
+/* atom that holds the saved layout of one tag on the root window */
+static Atom
+niri_layout_atom(int tag)
+{
+	static Atom atoms[LENGTH(tags)];
+	char name[32];
+
+	if (!atoms[tag]) {
+		snprintf(name, sizeof name, "_NIRI_LAYOUT_%d", tag);
+		atoms[tag] = XInternAtom(dpy, name, False);
+	}
+	return atoms[tag];
+}
+
+static int
+niri_ignore_error(Display *d, XErrorEvent *e)
+{
+	(void)d;
+	(void)e;
+	return 0;
+}
+
+static Client *
+niri_tile_by_win(Client **tiles, int n, Window win)
+{
+	int i;
+
+	for (i = 0; i < n; i++)
+		if (tiles[i]->win == win)
+			return tiles[i];
+	return NULL;
+}
+
+/* read the saved layout of a tag, NULL when there is none */
+static unsigned long *
+niri_record_get(int tag, unsigned long *n)
+{
+	Atom actual;
+	int format;
+	unsigned long extra;
+	unsigned char *data = NULL;
+
+	*n = 0;
+	if (XGetWindowProperty(dpy, root, niri_layout_atom(tag), 0L, 4096L, False,
+	        XA_CARDINAL, &actual, &format, n, &extra, &data) != Success)
+		return NULL;
+	if (!data || format != 32 || *n < 3 || data[0] != NIRI_STATE_VERSION) {
+		if (data)
+			XFree(data);
+		*n = 0;
+		return NULL;
+	}
+	return (unsigned long *)data;
+}
+
+/* Rebuild the strip of the current tag from its saved record.
+ *
+ * The record is a list of CARDINALs:
+ *     version, visible rows, column count
+ *     column: top visible row, window count, window ids...
+ *
+ * During the startup scan the record is applied as far as possible: a saved
+ * window that still exists on the server but is not managed yet means the scan
+ * is still running, so the strip is rebuilt again on the next arrange. */
+static void
+niri_state_restore(Monitor *m, Client **tiles, int n)
+{
+	struct NiriTagState *st = niri_state_of(m);
+	struct NiriStrip *s = &st->strip;
+	XErrorHandler oldhandler;
+	unsigned long *data, ndata, id;
+	XWindowAttributes wa;
+	int tag = niri_tag(m);
+	int i, j, cnt, rows, pending = 0;
+
+	if (st->restored)
+		return;
+
+	data = niri_record_get(tag, &ndata);
+	if (!data) {
+		/* no saved layout, or one from another version */
+		st->restored = 1;
+		return;
+	}
+
+	rows = (int)data[1];
+	if (rows >= 1 && rows <= NIRI_MAX)
+		st->visy = rows;
+
+	/* The error handler is swapped out because a window can disappear
+	 * between saving the layout and reading it back. */
+	oldhandler = XSetErrorHandler(niri_ignore_error);
+	i = 3;
+	while (i + 1 < (int)ndata) {
+		cnt = (int)data[i + 1];
+		i += 2;
+		if (cnt < 0 || i + cnt > (int)ndata)
+			break;
+		for (j = 0; j < cnt; j++) {
+			id = data[i++];
+			if (wintoclient((Window)id))
+				continue;
+			if (XGetWindowAttributes(dpy, (Window)id, &wa))
+				pending = 1;
+		}
+	}
+	XSync(dpy, False);
+	XSetErrorHandler(oldhandler);
+
+	/* put the known windows back into their columns, in their saved order */
+	s->ncol = 0;
+	i = 3;
+	while (i + 1 < (int)ndata && s->ncol < NIRI_MAX) {
+		struct NiriColumn col;
+		Client *c;
+
+		col.row = (int)data[i];
+		cnt = (int)data[i + 1];
+		i += 2;
+		if (cnt < 0 || i + cnt > (int)ndata)
+			break;
+
+		col.n = 0;
+		for (j = 0; j < cnt && col.n < NIRI_MAX; j++) {
+			id = data[i++];
+			c = niri_tile_by_win(tiles, n, (Window)id);
+			if (c)
+				col.c[col.n++] = c;
+		}
+		if (col.n > 0) {
+			if (col.row < 0)
+				col.row = 0;
+			s->col[s->ncol++] = col;
+		}
+	}
+
+	if (!pending)
+		st->restored = 1;
+
+	XFree(data);
+}
+
+/* mirror the layout of the current tag onto the root window */
+static void
+niri_state_put(Monitor *m)
+{
+	struct NiriTagState *st = niri_state_of(m);
+	struct NiriStrip *s = &st->strip;
+	long data[3 + 3 * NIRI_MAX];
+	int tag = niri_tag(m);
+	int i, j, k = 0;
+
+	/* while the startup scan is still running the old record is better */
+	if (!st->restored)
+		return;
+
+	data[k++] = NIRI_STATE_VERSION;
+	data[k++] = st->visy;
+	data[k++] = s->ncol;
+	for (i = 0; i < s->ncol; i++) {
+		data[k++] = s->col[i].row;
+		data[k++] = s->col[i].n;
+		for (j = 0; j < s->col[i].n; j++)
+			data[k++] = (long)s->col[i].c[j]->win;
+	}
+	XChangeProperty(dpy, root, niri_layout_atom(tag), XA_CARDINAL, 32,
+	                PropModeReplace, (unsigned char *)data, k);
+}
+
+#else
+
+/* Without pertag niri keeps one layout and has nothing to store per tag. */
+static void
+niri_state_restore(Monitor *m, Client **tiles, int n)
+{
+	(void)m;
+	(void)tiles;
+	(void)n;
+}
+
+static void
+niri_state_put(Monitor *m)
+{
+	(void)m;
+}
+
+#endif
 
 /* how far the view is scrolled along the X axis */
 static int
@@ -155,7 +374,7 @@ niri_visible(Monitor *m)
 static int
 niri_rows(Monitor *m)
 {
-	int r = niri_visy[niri_tag(m)];
+	int r = niri_state_of(m)->visy;
 
 	if (r < 1)
 		r = 1;
@@ -168,7 +387,7 @@ niri_rows(Monitor *m)
 static void
 niri_remove_column(Monitor *m, int i)
 {
-	struct NiriStrip *s = &niri_strip[niri_tag(m)];
+	struct NiriStrip *s = &niri_state_of(m)->strip;
 	int k;
 
 	for (k = i; k + 1 < s->ncol; k++)
@@ -181,7 +400,7 @@ niri_remove_column(Monitor *m, int i)
 static int
 niri_column_of(Monitor *m, Client *c)
 {
-	struct NiriStrip *s = &niri_strip[niri_tag(m)];
+	struct NiriStrip *s = &niri_state_of(m)->strip;
 	int i, j;
 
 	if (!c)
@@ -212,7 +431,7 @@ niri_known(struct NiriStrip *s, Client *c)
 static int
 niri_insert_index(Monitor *m)
 {
-	struct NiriStrip *s = &niri_strip[niri_tag(m)];
+	struct NiriStrip *s = &niri_state_of(m)->strip;
 	Client *c;
 
 	if (m->sel && niri_known(s, m->sel))
@@ -229,13 +448,16 @@ niri_insert_index(Monitor *m)
 static void
 niri_sync(Monitor *m)
 {
-	struct NiriStrip *s = &niri_strip[niri_tag(m)];
+	struct NiriStrip *s = &niri_state_of(m)->strip;
 	Client *c, *tiles[NIRI_MAX];
 	int n = 0, i, j, k, seen, pos;
 
 	for (c = nexttiled(m->clients); c; c = nexttiled(c->next))
 		if (n < NIRI_MAX)
 			tiles[n++] = c;
+
+	/* after a restart the saved layout replaces the empty table */
+	niri_state_restore(m, tiles, n);
 
 	/* drop windows that are gone, then columns that became empty */
 	for (i = 0; i < s->ncol; ) {
@@ -296,7 +518,7 @@ static void
 niri_geom(Monitor *m, struct NiriGeom *g)
 {
 	g->n = niri_n;
-	g->ncols = niri_strip[niri_tag(m)].ncol;
+	g->ncols = niri_state_of(m)->strip.ncol;
 	g->bw = g->n > 0 ? niri_list[0]->bw : 0;
 	g->gap = niri_gap(m);
 
@@ -346,7 +568,7 @@ niri(Monitor *m)
 
 	niri_sync(m);
 	niri_geom(m, &g);
-	s = &niri_strip[niri_tag(m)];
+	s = &niri_state_of(m)->strip;
 	cx = niri_offset(m);
 
 	/* the focused column has to be fully visible */
@@ -406,6 +628,9 @@ niri(Monitor *m)
 			             g.cw, vh);
 		}
 	}
+
+	/* remember the columns for the next start */
+	niri_state_put(m);
 }
 
 /* scroll the focused column one window up or down, the columns and their
@@ -414,7 +639,7 @@ niri(Monitor *m)
 static void
 niri_scroll_column(Monitor *m, int dir)
 {
-	struct NiriStrip *s = &niri_strip[niri_tag(m)];
+	struct NiriStrip *s = &niri_state_of(m)->strip;
 	int fcol = niri_column_of(m, m->sel);
 	int j, rows;
 
@@ -448,7 +673,7 @@ niri_scroll_column(Monitor *m, int dir)
 static void
 niri_focus_column(Monitor *m, int dir)
 {
-	struct NiriStrip *s = &niri_strip[niri_tag(m)];
+	struct NiriStrip *s = &niri_state_of(m)->strip;
 	struct NiriGeom g;
 	int fcol = niri_column_of(m, m->sel);
 	int col, row, cx;
@@ -482,7 +707,7 @@ niri_focus_column(Monitor *m, int dir)
 static void
 niri_focus_row(Monitor *m, int dir)
 {
-	struct NiriStrip *s = &niri_strip[niri_tag(m)];
+	struct NiriStrip *s = &niri_state_of(m)->strip;
 	int fcol = niri_column_of(m, m->sel);
 	int j, nj, rows;
 
@@ -562,7 +787,7 @@ niri_scroll(const Arg *arg)
 	if (col >= g.ncols)
 		col = g.ncols - 1;
 
-	s = &niri_strip[niri_tag(m)];
+	s = &niri_state_of(m)->strip;
 	if (s->col[col].n > 0 && s->col[col].c[0] != m->sel)
 		focus(s->col[col].c[0]);
 	restack(m);
@@ -591,7 +816,7 @@ niri_home(const Arg *arg)
 	niri_sync(m);
 	niri_set_offset(m, 0);
 
-	s = &niri_strip[niri_tag(m)];
+	s = &niri_state_of(m)->strip;
 	c = s->ncol > 0 ? s->col[0].c[0] : NULL;
 	if (c && c != m->sel)
 		focus(c);
@@ -604,7 +829,7 @@ niri_home(const Arg *arg)
 static void
 niri_consume(Monitor *m)
 {
-	struct NiriStrip *s = &niri_strip[niri_tag(m)];
+	struct NiriStrip *s = &niri_state_of(m)->strip;
 	int fcol = niri_column_of(m, m->sel);
 	int i, k;
 
@@ -628,7 +853,7 @@ niri_consume(Monitor *m)
 static void
 niri_expel(Monitor *m)
 {
-	struct NiriStrip *s = &niri_strip[niri_tag(m)];
+	struct NiriStrip *s = &niri_state_of(m)->strip;
 	int fcol = niri_column_of(m, m->sel);
 	Client *c = m->sel;
 	int i, j;
@@ -733,7 +958,7 @@ niri_vzoom(const Arg *arg)
 	if (rows > NIRI_MAX)
 		rows = NIRI_MAX;
 
-	niri_visy[niri_tag(m)] = rows;
+	niri_state_of(m)->visy = rows;
 	arrange(m);
 }
 

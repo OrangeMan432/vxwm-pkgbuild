@@ -49,8 +49,8 @@ package() {
 md5sums=('SKIP'
          'f187782edcd0e11ddc17fa5802c38c4a'
          '6c1152a2522a5d618d6483987c6e2220'
-         '6da8d82288d09f493e1e0c4347e939d8'
+         'fc937912b69dacc73bf562509ac1892b'
          '5a34e754c994279882ddc2d02acdb07f'
-         '8d7034b65e2d53edd668aa4769f34110'
+         '9535d01ef810c610a33dba6267ff7b06'
          'a7e862491c1e94887913a2e47755eb3a'
          'd75cd451fa15bff5e777acc0d7cd64d9')
