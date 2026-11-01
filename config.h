@@ -117,7 +117,7 @@ static const Layout layouts[] = {
 	{ "><>",      NULL },    /* no layout function means floating behavior */
 	{ "[]=",      tile },    /* first entry is default */
 	{ "[M]",      monocle },
-	{ "[>]",      niri },    /* niri-like layout, scrolls on one axis only */
+	{ "[>]",      niri },    /* niri-like layout, scrolls columns and stacks */
 };
 
 /* key definitions */
@@ -161,19 +161,23 @@ static const Key keys[] = {
 	{ MODKEY,                       XK_p,      spawn,          {.v = dmenucmd } },
 	{ MODKEY|ShiftMask,             XK_Return, spawn,          {.v = termcmd } },
 	{ 0,                            XF86XK_Launch1, spawn,     {.v = scriptmenucmd } },
-	{ MODKEY|ShiftMask,             XK_l,      spawn,          {.v = lockcmd } },
+	{ ALTERNATE_MODKEY,             XK_l,      spawn,          {.v = lockcmd } }, /* lock */
 	{ MODKEY,                       XK_y,      spawn,          SHCMD("/usr/bin/dwm-tabs.sh attach") },
 	{ MODKEY|ShiftMask,             XK_y,      spawn,          SHCMD("/usr/bin/dwm-tabs.sh detach") },
 	{ MODKEY,                       XK_b,      togglebar,      {0} },
 #if DUALSTATUS
 	{ MODKEY|ShiftMask,             XK_b,      togglebotbar,   {0} },
 #endif
-	{ MODKEY,                       XK_j,      niri_focusstack, {.i = +1 } },
-	{ MODKEY,                       XK_k,      niri_focusstack, {.i = -1 } },
+	{ MODKEY,                       XK_h,      niri_focus,     {.i = 0 } }, /* left */
+	{ MODKEY,                       XK_j,      niri_focus,     {.i = 3 } }, /* down */
+	{ MODKEY,                       XK_k,      niri_focus,     {.i = 2 } }, /* up */
+	{ MODKEY,                       XK_l,      niri_focus,     {.i = 1 } }, /* right */
 	{ MODKEY,                       XK_i,      niri_incnmaster, {.i = +1 } },
 	{ MODKEY,                       XK_d,      niri_incnmaster, {.i = -1 } },
-	{ MODKEY,                       XK_h,      niri_zoom,      {.i = +1 } },
-	{ MODKEY,                       XK_l,      niri_zoom,      {.i = -1 } },
+	{ MODKEY|ShiftMask,             XK_h,      niri_zoom,      {.i = +1 } }, /* more columns */
+	{ MODKEY|ShiftMask,             XK_l,      niri_zoom,      {.i = -1 } }, /* fewer columns */
+	{ MODKEY|ShiftMask,             XK_k,      niri_vzoom,     {.i = +1 } }, /* more rows */
+	{ MODKEY|ShiftMask,             XK_j,      niri_vzoom,     {.i = -1 } }, /* fewer rows */
 	{ MODKEY,                       XK_Return, swapmaster,     {0} }, /* vxwm has no zoom(); swapmaster is the equivalent of dwm's zoom */
 	{ MODKEY,                       XK_Tab,    view,           {0} },
 	{ MODKEY|ShiftMask,             XK_c,      killclient,     {0} },
@@ -196,6 +200,7 @@ static const Key keys[] = {
 	{ 0, XF86XK_AudioPrev,                     spawn,          SHCMD("playerctl previous") },
 	{ 0, XF86XK_AudioNext,                     spawn,          SHCMD("playerctl next") },
 	{ 0, XF86XK_AudioStop,                     spawn,          SHCMD("playerctl stop") },
+	{ 0, XF86XK_AudioMicMute,                       spawn,          SHCMD("pactl set-source-mute 0 toggle; pkill -P $(cat /tmp/statusbar.pid) sleep") },
 	TAGKEYS(                        XK_1,                      0)
 	TAGKEYS(                        XK_2,                      1)
 	TAGKEYS(                        XK_3,                      2)

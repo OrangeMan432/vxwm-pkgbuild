@@ -1,0 +1,35 @@
+--- vxwm.c
++++ vxwm.c
+@@ -1157,6 +1157,9 @@
+ #endif
+ }
+ 
++/* time of the last keybinding, see enternotify() */
++static Time lastkeytime;
++
+ void
+ enternotify(XEvent *e)
+ {
+@@ -1166,6 +1169,10 @@
+ 
+ 	if ((ev->mode != NotifyNormal || ev->detail == NotifyInferior) && ev->window != root)
+ 		return;
++	/* a keybinding can move windows under a stationary pointer, which also
++	 * sends enter events; those must not override the focus the key set */
++	if (lastkeytime && ev->time - lastkeytime < 200)
++		return;
+ 	c = wintoclient(ev->window);
+ 	m = c ? c->mon : wintomon(ev->window);
+ 	if (m != selmon) {
+@@ -1463,8 +1470,10 @@
+ 	for (i = 0; i < LENGTH(keys); i++)
+ 		if (keysym == keys[i].keysym
+ 		&& CLEANMASK(keys[i].mod) == CLEANMASK(ev->state)
+-		&& keys[i].func)
++		&& keys[i].func) {
++			lastkeytime = ev->time;
+ 			keys[i].func(&(keys[i].arg));
++		}
+ }
+ 
+ void
