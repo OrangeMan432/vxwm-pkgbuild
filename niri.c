@@ -29,6 +29,9 @@
  *   niri_scroll     (MODKEY+Shift+arrows)  left/right scrolls the columns,
  *                                          up/down scrolls the focused column
  *                                          one window, the other columns stay
+ *
+ * Define NIRI_ALWAYS_CENTER_SINGLE_COLUMN to 1 in config.h to center a
+ * single column horizontally, like niri's always-center-single-column.
  * The column order, the width/height presets and the scroll offsets are stored
  * per tag in a table in this file, like pertag does it and only when PERTAG is
  * enabled. The table is also mirrored onto the root window, one property per
@@ -641,6 +644,7 @@ struct NiriGeom {
 	int cw[NIRI_MAX];     /* client width of a window, per column */
 	int relx[NIRI_MAX];   /* left edge of the column, relative to the strip */
 	int stripw;           /* width of the strip, leading gap to trailing edge */
+	int centered;         /* centering a single column? */
 };
 
 static void
@@ -676,6 +680,10 @@ niri_geom(Monitor *m, struct NiriGeom *g)
 		x += foot + g->gap;
 	}
 	g->stripw = x - g->gap;
+	g->centered = 0;
+#if NIRI_ALWAYS_CENTER_SINGLE_COLUMN
+	g->centered = g->ncols == 1;
+#endif
 }
 
 /* how far the view is scrolled along the X axis */
@@ -683,6 +691,9 @@ static int
 niri_clamp(Monitor *m, struct NiriGeom *g, int cx)
 {
 	int min;
+
+	if (g->centered)
+		return cx;
 
 	if (g->stripw <= m->ww - g->gap)
 		return 0;
@@ -777,7 +788,12 @@ niri(Monitor *m)
 	niri_sync(m);
 	niri_geom(m, &g);
 	s = &niri_state_of(m)->strip;
-	cx = niri_offset(m);
+	if (g.centered) {
+		int foot = g.cw[0] + 2 * g.bw;
+
+		cx = (m->ww - foot) / 2 - g.relx[0];
+	} else
+		cx = niri_offset(m);
 	innerh = m->wh - 2 * g.gap;
 	if (innerh < 1)
 		innerh = 1;

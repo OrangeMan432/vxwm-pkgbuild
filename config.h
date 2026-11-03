@@ -31,7 +31,8 @@ static MAYBE_CONST char *colors[][3] = {
 };
 
 #define CENTER_NEW_FLOATING_WINDOWS 1 // so, basically, it does what it says. (make 0 to turn off)
-#define NEW_FLOATING_WINDOWS_APPEAR_UNDER_CURSOR 0 // so, basically, it does what it says. (make 0 to turn off) 
+#define NEW_FLOATING_WINDOWS_APPEAR_UNDER_CURSOR 0 // so, basically, it does what it says. (make 0 to turn off)
+#define NIRI_ALWAYS_CENTER_SINGLE_COLUMN 1 // centers a single niri column on the screen, like niri's always-center-single-column
 
 #if GAPS
 static const unsigned int gappx = 10;
