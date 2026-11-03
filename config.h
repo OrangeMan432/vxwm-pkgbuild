@@ -83,7 +83,7 @@ static const char *occupiedtags[] = { "one+", "two+", "three+", "four+" };
 
 	static const char *const autostart[] = {
 	"pgrep -x dunst > /dev/null || dunst",
-	"picom",
+	"vcompmgr",
 	"xclickroot -r bash /usr/bin/xmenu.sh",
 	"pgrep -f 'statusbar.sh' > /dev/null || statusbar.sh",
 	"unclutter --timeout 1",
@@ -152,6 +152,7 @@ static const char *lockcmd[]  = { "slock", NULL };
 static const char *zoomin[] = { "vcompmgr", "-Z", "+0.15", NULL }; // zoom in
 static const char *zoomout[] = { "vcompmgr", "-Z", "-0.15", NULL }; // zoom out
 static const char *zoomreset[] = { "vcompmgr", "-Z", "1", NULL }; // set zoom to 1
+static const char *zoomtoggle[] = { "vcompmgr", "-T", "0.55", NULL }; // toggle between 1x and three zoom steps out
 #endif
 
 #include <X11/XF86keysym.h>
@@ -185,7 +186,11 @@ static const Key keys[] = {
 	{ MODKEY,                       XK_f,      setlayout,      {.v = &layouts[0]} }, /* floating (layouts[0] in vxwm == layouts[1] in dwm) */
 	{ MODKEY,                       XK_m,      setlayout,      {.v = &layouts[2]} },
 	{ MODKEY,                       XK_n,      setlayout,      {.v = &layouts[3]} },
+#if ZOOM
+	{ MODKEY,                       XK_space,  spawn,          {.v = zoomtoggle } }, /* toggle compositor zoom */
+#else
 	{ MODKEY,                       XK_space,  setlayout,      {0} },
+#endif
 	{ MODKEY|ShiftMask,             XK_space,  togglefloating, {0} }, //default toggle floating bind.
 	{ MODKEY,                       XK_0,      view,           {.ui = ~0 } },
 	{ MODKEY|ShiftMask,             XK_0,      tag,            {.ui = ~0 } },
