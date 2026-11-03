@@ -4,9 +4,11 @@
  * scrolled along the X axis and a column's stack along the Y axis, just like
  * niri does it.
  *
- * A single window takes the whole screen, a second one splits the screen in
- * half and every further column pushes the older ones off the screen, the
- * focused window is always fully visible.
+ * Every column has its own width and every window its own height: one of
+ * one third, one half, two thirds or the full monitor size. Columns scroll
+ * off the edges of the screen instead of shrinking to fit it, and so do the
+ * windows stacked in a column: the focused window is always kept fully
+ * visible, the rest goes off the top or the bottom.
  *
  * New windows open as their own column directly left of the focused stack, so
  * opening a window pushes the focused stack and everything right of it to the
@@ -20,20 +22,19 @@
  *   niri_focus      (MODKEY+h/j/k/l)       move left/down/up/right between the
  *                                          columns and the windows stacked in
  *                                          them, the view scrolls along
- *   niri_zoom       (MODKEY+Shift+h/l)     how many columns fit on the screen,
- *                                          every press changes it by one
- *   niri_vzoom      (MODKEY+Shift+k/j)     how many stacked windows are visible,
- *                                          every press changes it by one
+ *   niri_zoom       (MODKEY+Shift+h/l)     cycle the focused column's width
+ *                                          one step smaller / bigger
+ *   niri_vzoom      (MODKEY+Shift+k/j)     cycle the focused window's height
+ *                                          one step smaller / bigger
  *   niri_scroll     (MODKEY+Shift+arrows)  left/right scrolls the columns,
  *                                          up/down scrolls the focused column
  *                                          one window, the other columns stay
- * The column layout, the scroll offsets and the vertical zoom are stored per
- * tag in a table in this file, like pertag does it and only when PERTAG is
- * enabled; the horizontal zoom stays in mfact so setmfact() persists it. The
- * table is also mirrored onto the root window, one property per tag, so a
- * restarted vxwm rebuilds the columns the way they were. That only uses Xlib
- * and the structures vxwm already has, so this file still works with an
- * unpatched vxwm (there without the extra tag/monitor restore).
+ * The column order, the width/height presets and the scroll offsets are stored
+ * per tag in a table in this file, like pertag does it and only when PERTAG is
+ * enabled. The table is also mirrored onto the root window, one property per
+ * tag, so a restarted vxwm rebuilds the columns the way they were. That only
+ * uses Xlib and the structures vxwm already has, so this file still works
+ * with an unpatched vxwm (there without the extra tag/monitor restore).
  *
  * The gaps are laid out like tile() does it: gappx between two windows and at
  * the edges, so everything is evenly spaced.
@@ -72,18 +73,104 @@
 #define NIRI_SCROLL_STEP 120 /* pixels the view travels per scroll step */
 #define NIRI_MAX 64          /* windows the strip can hold */
 #if PERTAG
-#define NIRI_STATE_VERSION 1
+#define NIRI_STATE_VERSION 2
+#define NIRI_STATE_LEGACY_VERSION 1
 #endif
 
 /* the windows of the strip in display order, left to right then top to bottom */
 static Client *niri_list[NIRI_MAX];
 static int niri_n;
 
+/* the width/height presets a column or window can be set to */
+#define NIRI_SIZE_THIRD 0
+#define NIRI_SIZE_HALF  1
+#define NIRI_SIZE_TWOHIRD 2
+#define NIRI_SIZE_FULL  3
+#define NIRI_NSIZES     4
+#define NIRI_SIZE_DEFAULT NIRI_SIZE_HALF
+#define NIRI_HEIGHT_DEFAULT NIRI_SIZE_FULL
+
+static const double niri_sizes[NIRI_NSIZES] = {
+	1.0 / 3.0,
+	0.5,
+	2.0 / 3.0,
+	1.0,
+};
+
+/* fit the cells of one axis: a contiguous group of cells whose fractions add
+ * up to one screen shares the inner span minus the gaps, so opposite edges
+ * leave the same gap; cells that do not make a full screen keep their
+ * absolute fractions, allowing the strip to run off the screen */
+static void
+niri_fit_one(const double *f, int i, int j, int inner, int gap, int min,
+             int *span)
+{
+	int count, k, total, used = 0;
+
+	count = j - i + 1;
+	total = inner - (count - 1) * gap;
+	if (total < min)
+		total = min;
+	for (k = i; k < j; k++) {
+		span[k] = (int)(f[k] * total + 0.5);
+		span[k] = span[k] < min ? min : span[k];
+		used += span[k];
+	}
+	span[j] = total - used;
+	for (k = i; k <= j; k++)
+		if (span[k] < min)
+			span[k] = min;
+}
+
+/* fit the cells of one axis: any contiguous run whose fractions add up to one
+ * screen shares the inner span minus the gaps, so opposite edges leave the
+ * same gap. Cells that are not part of a full screen keep their absolute
+ * fractions, allowing the strip to run off the screen. This finds the largest
+ * set of non-overlapping full-screen runs anywhere in the strip. */
+static void
+niri_fit_spans(const double *f, int n, int inner, int gap, int min, int *span)
+{
+	int best[NIRI_MAX + 1], end[NIRI_MAX + 1];
+	int i, j;
+	double sum;
+
+	best[n] = 0;
+	for (i = n - 1; i >= 0; i--) {
+		best[i] = best[i + 1];
+		end[i] = i + 1;
+		sum = 0.0;
+		for (j = i; j < n; j++) {
+			sum += f[j];
+			if (sum > 1.01)
+				break;
+			if (sum > 0.99 && j - i + 1 + best[j + 1] > best[i]) {
+				best[i] = j - i + 1 + best[j + 1];
+				end[i] = j + 1;
+			}
+		}
+	}
+
+	i = 0;
+	while (i < n) {
+		if (end[i] > i + 1) {
+			niri_fit_one(f, i, end[i] - 1, inner, gap, min, span);
+			i = end[i];
+		} else {
+			span[i] = (int)(f[i] * inner + 0.5);
+			if (span[i] < min)
+				span[i] = min;
+			i++;
+		}
+	}
+}
+
 /* one column of the strip */
 struct NiriColumn {
 	Client *c[NIRI_MAX]; /* the windows sharing the column, top to bottom */
+	int h[NIRI_MAX];     /* one NIRI_SIZE_* per window, same order */
 	int n;               /* how many windows share the column */
-	int row;             /* topmost visible window of the stack */
+	int width;           /* one NIRI_SIZE_*, applies to every window in it */
+	int voff;            /* how far the stack is scrolled, in pixels */
 };
 
 /* the strip of one tag */
@@ -102,7 +189,6 @@ struct NiriStrip {
  */
 struct NiriTagState {
 	struct NiriStrip strip;
-	int visy;     /* stacked windows sharing the screen height, 0 is one */
 	int restored; /* has the saved layout of this tag been read back? */
 };
 
@@ -170,6 +256,76 @@ niri_tile_by_win(Client **tiles, int n, Window win)
 	return NULL;
 }
 
+/* a column decoded from the saved record */
+struct NiriSavedColumn {
+	int width;
+	int h[NIRI_MAX];
+	Window win[NIRI_MAX];
+	int n;
+};
+
+static int
+niri_size_index(unsigned long v, int def)
+{
+	return v < NIRI_NSIZES ? (int)v : def;
+}
+
+static int
+niri_state_parse(const unsigned long *data, int ndata, int *ncols,
+                 struct NiriSavedColumn *cols)
+{
+	int i, j, wincnt, top, version, col;
+
+	*ncols = 0;
+	if (!data || ndata < 2)
+		return 0;
+
+	version = (int)data[0];
+	if (version == NIRI_STATE_VERSION) {
+		wincnt = 1;
+		i = 2;
+		*ncols = (int)data[1];
+		for (j = 0; j < *ncols && i + 1 < ndata; j++) {
+			cols[j].width = niri_size_index(data[i], NIRI_SIZE_DEFAULT);
+			wincnt = (int)data[i + 1];
+			i += 2;
+			if (wincnt < 0 || wincnt > NIRI_MAX || i + wincnt * 2 > ndata)
+				return 0;
+			cols[j].n = wincnt;
+			for (col = 0; col < wincnt; col++) {
+				cols[j].h[col] = niri_size_index(data[i], NIRI_HEIGHT_DEFAULT);
+				cols[j].win[col] = (Window)data[i + 1];
+				i += 2;
+			}
+		}
+		return j == *ncols || j == NIRI_MAX;
+	}
+
+	if (version == NIRI_STATE_LEGACY_VERSION) {
+		if (ndata < 3)
+			return 0;
+		i = 3;
+		*ncols = (int)data[2];
+		for (j = 0; j < *ncols && i + 1 < ndata; j++) {
+			top = (int)data[i];
+			(void)top;
+			wincnt = (int)data[i + 1];
+			i += 2;
+			if (wincnt < 0 || wincnt > NIRI_MAX || i + wincnt > ndata)
+				return 0;
+			cols[j].width = NIRI_SIZE_DEFAULT;
+			cols[j].n = wincnt;
+			for (col = 0; col < wincnt; col++) {
+				cols[j].h[col] = NIRI_HEIGHT_DEFAULT;
+				cols[j].win[col] = (Window)data[i++];
+			}
+		}
+		return j == *ncols || j == NIRI_MAX;
+	}
+
+	return 0;
+}
+
 /* read the saved layout of a tag, NULL when there is none */
 static unsigned long *
 niri_record_get(int tag, unsigned long *n)
@@ -183,7 +339,9 @@ niri_record_get(int tag, unsigned long *n)
 	if (XGetWindowProperty(dpy, root, niri_layout_atom(tag), 0L, 4096L, False,
 	        XA_CARDINAL, &actual, &format, n, &extra, &data) != Success)
 		return NULL;
-	if (!data || format != 32 || *n < 3 || data[0] != NIRI_STATE_VERSION) {
+	if (!data || format != 32 || *n < 2
+	        || (data[0] != NIRI_STATE_VERSION
+	            && data[0] != NIRI_STATE_LEGACY_VERSION)) {
 		if (data)
 			XFree(data);
 		*n = 0;
@@ -194,9 +352,14 @@ niri_record_get(int tag, unsigned long *n)
 
 /* Rebuild the strip of the current tag from its saved record.
  *
- * The record is a list of CARDINALs:
- *     version, visible rows, column count
- *     column: top visible row, window count, window ids...
+ * Version 2:
+ *     version, column count
+ *     column: width preset, window count, then per window:
+ *             height preset, window id
+ *
+ * Version 1 (legacy):
+ *     version, unused, column count
+ *     column: unused, window count, window ids...
  *
  * During the startup scan the record is applied as far as possible: a saved
  * window that still exists on the server but is not managed yet means the scan
@@ -206,11 +369,12 @@ niri_state_restore(Monitor *m, Client **tiles, int n)
 {
 	struct NiriTagState *st = niri_state_of(m);
 	struct NiriStrip *s = &st->strip;
+	struct NiriSavedColumn saved[NIRI_MAX];
 	XErrorHandler oldhandler;
 	unsigned long *data, ndata, id;
 	XWindowAttributes wa;
 	int tag = niri_tag(m);
-	int i, j, cnt, rows, pending = 0;
+	int i, j, ncol, pending = 0;
 
 	if (st->restored)
 		return;
@@ -221,56 +385,45 @@ niri_state_restore(Monitor *m, Client **tiles, int n)
 		st->restored = 1;
 		return;
 	}
-
-	rows = (int)data[1];
-	if (rows >= 1 && rows <= NIRI_MAX)
-		st->visy = rows;
+	if (!niri_state_parse(data, (int)ndata, &ncol, saved)) {
+		XFree(data);
+		st->restored = 1;
+		return;
+	}
 
 	/* The error handler is swapped out because a window can disappear
 	 * between saving the layout and reading it back. */
 	oldhandler = XSetErrorHandler(niri_ignore_error);
-	i = 3;
-	while (i + 1 < (int)ndata) {
-		cnt = (int)data[i + 1];
-		i += 2;
-		if (cnt < 0 || i + cnt > (int)ndata)
-			break;
-		for (j = 0; j < cnt; j++) {
-			id = data[i++];
+	for (i = 0; i < ncol; i++)
+		for (j = 0; j < saved[i].n; j++) {
+			id = saved[i].win[j];
 			if (wintoclient((Window)id))
 				continue;
 			if (XGetWindowAttributes(dpy, (Window)id, &wa))
 				pending = 1;
 		}
-	}
 	XSync(dpy, False);
 	XSetErrorHandler(oldhandler);
 
 	/* put the known windows back into their columns, in their saved order */
 	s->ncol = 0;
-	i = 3;
-	while (i + 1 < (int)ndata && s->ncol < NIRI_MAX) {
+	for (i = 0; i < ncol && s->ncol < NIRI_MAX; i++) {
 		struct NiriColumn col;
 		Client *c;
 
-		col.row = (int)data[i];
-		cnt = (int)data[i + 1];
-		i += 2;
-		if (cnt < 0 || i + cnt > (int)ndata)
-			break;
-
+		col.width = saved[i].width;
+		col.voff = 0;
 		col.n = 0;
-		for (j = 0; j < cnt && col.n < NIRI_MAX; j++) {
-			id = data[i++];
-			c = niri_tile_by_win(tiles, n, (Window)id);
-			if (c)
-				col.c[col.n++] = c;
+		for (j = 0; j < saved[i].n && col.n < NIRI_MAX; j++) {
+			c = niri_tile_by_win(tiles, n, saved[i].win[j]);
+			if (c) {
+				col.h[col.n] = saved[i].h[j];
+				col.c[col.n] = c;
+				col.n++;
+			}
 		}
-		if (col.n > 0) {
-			if (col.row < 0)
-				col.row = 0;
+		if (col.n > 0)
 			s->col[s->ncol++] = col;
-		}
 	}
 
 	if (!pending)
@@ -285,7 +438,7 @@ niri_state_put(Monitor *m)
 {
 	struct NiriTagState *st = niri_state_of(m);
 	struct NiriStrip *s = &st->strip;
-	long data[3 + 3 * NIRI_MAX];
+	long data[2 + 2 * NIRI_MAX + 2 * NIRI_MAX];
 	int tag = niri_tag(m);
 	int i, j, k = 0;
 
@@ -294,13 +447,14 @@ niri_state_put(Monitor *m)
 		return;
 
 	data[k++] = NIRI_STATE_VERSION;
-	data[k++] = st->visy;
 	data[k++] = s->ncol;
 	for (i = 0; i < s->ncol; i++) {
-		data[k++] = s->col[i].row;
+		data[k++] = s->col[i].width;
 		data[k++] = s->col[i].n;
-		for (j = 0; j < s->col[i].n; j++)
+		for (j = 0; j < s->col[i].n; j++) {
+			data[k++] = s->col[i].h[j];
 			data[k++] = (long)s->col[i].c[j]->win;
+		}
 	}
 	XChangeProperty(dpy, root, niri_layout_atom(tag), XA_CARDINAL, 32,
 	                PropModeReplace, (unsigned char *)data, k);
@@ -352,35 +506,6 @@ niri_gap(Monitor *m)
 #else
 	return 0;
 #endif
-}
-
-/* how many columns fit on the screen */
-static int
-niri_visible(Monitor *m)
-{
-	int v;
-
-	if (m->mfact <= 0)
-		return 1;
-	v = (int)(1.0 / m->mfact + 0.5);
-	if (v < 1)
-		v = 1;
-	if (v > NIRI_MAX)
-		v = NIRI_MAX;
-	return v;
-}
-
-/* how many windows of a stack fit on the screen */
-static int
-niri_rows(Monitor *m)
-{
-	int r = niri_state_of(m)->visy;
-
-	if (r < 1)
-		r = 1;
-	if (r > NIRI_MAX)
-		r = NIRI_MAX;
-	return r;
 }
 
 /* throw the columns after i one position to the front */
@@ -471,8 +596,10 @@ niri_sync(Monitor *m)
 			if (seen) {
 				j++;
 			} else {
-				for (k = j; k + 1 < s->col[i].n; k++)
+				for (k = j; k + 1 < s->col[i].n; k++) {
 					s->col[i].c[k] = s->col[i].c[k + 1];
+					s->col[i].h[k] = s->col[i].h[k + 1];
+				}
 				s->col[i].n--;
 			}
 		}
@@ -491,7 +618,10 @@ niri_sync(Monitor *m)
 		for (i = s->ncol; i > pos; i--)
 			s->col[i] = s->col[i - 1];
 		s->col[pos].n = 1;
+		s->col[pos].width = NIRI_SIZE_DEFAULT;
+		s->col[pos].voff = 0;
 		s->col[pos].c[0] = tiles[k];
+		s->col[pos].h[0] = NIRI_HEIGHT_DEFAULT;
 		s->ncol++;
 	}
 
@@ -504,49 +634,60 @@ niri_sync(Monitor *m)
 }
 
 struct NiriGeom {
-	int n;      /* windows in the strip */
-	int ncols;  /* columns in the strip */
-	int cols;   /* columns that share the screen */
-	int rows;   /* windows that share the screen height in a stack */
-	int cw;     /* client width of a window */
-	int bw;     /* border width */
-	int gap;    /* gap between two windows and at the edges */
-	int stride; /* distance between the left edges of two columns */
+	int n;                /* windows in the strip */
+	int ncols;            /* columns in the strip */
+	int bw;               /* border width */
+	int gap;              /* gap between two windows and at the edges */
+	int cw[NIRI_MAX];     /* client width of a window, per column */
+	int relx[NIRI_MAX];   /* left edge of the column, relative to the strip */
+	int stripw;           /* width of the strip, leading gap to trailing edge */
 };
 
 static void
 niri_geom(Monitor *m, struct NiriGeom *g)
 {
+	struct NiriStrip *s = &niri_state_of(m)->strip;
+	int inner, x, i, foot;
+
 	g->n = niri_n;
-	g->ncols = niri_state_of(m)->strip.ncol;
+	g->ncols = s->ncol;
 	g->bw = g->n > 0 ? niri_list[0]->bw : 0;
 	g->gap = niri_gap(m);
 
-	/* fewer columns than the zoom level: let them share the screen */
-	g->cols = g->ncols < niri_visible(m) ? g->ncols : niri_visible(m);
-	if (g->cols < 1)
-		g->cols = 1;
+	/* full sets of widths that add up to one screen share the width and the
+	 * gaps between columns exactly; other sizes keep their absolute width */
+	double f[NIRI_MAX];
+	int span[NIRI_MAX];
 
-	/* one gap between neighbouring windows and at both edges */
-	g->cw = (m->ww - (g->cols + 1) * g->gap) / g->cols - 2 * g->bw;
-	if (g->cw < 1)
-		g->cw = 1;
-	g->stride = g->cw + 2 * g->bw + g->gap;
+	inner = m->ww - 2 * g->gap;
+	if (inner < 1)
+		inner = 1;
+	for (i = 0; i < g->ncols; i++) {
+		double v = niri_sizes[s->col[i].width];
 
-	/* how many windows of a stack are visible */
-	g->rows = niri_rows(m);
+		f[i] = v > 0.0 ? v : niri_sizes[NIRI_SIZE_DEFAULT];
+	}
+	niri_fit_spans(f, g->ncols, inner, g->gap, 2 * g->bw + 1, span);
+	x = g->gap;
+	for (i = 0; i < g->ncols; i++) {
+		foot = span[i];
+		g->cw[i] = foot - 2 * g->bw;
+		g->relx[i] = x;
+		x += foot + g->gap;
+	}
+	g->stripw = x - g->gap;
 }
 
-/* the view cannot leave the strip */
+/* how far the view is scrolled along the X axis */
 static int
 niri_clamp(Monitor *m, struct NiriGeom *g, int cx)
 {
 	int min;
 
-	if (g->ncols < 2)
+	if (g->stripw <= m->ww - g->gap)
 		return 0;
 
-	min = m->ww - g->cw - 2 * g->bw - 2 * g->gap - (g->ncols - 1) * g->stride;
+	min = m->ww - g->gap - g->stripw;
 	if (min > 0)
 		min = 0;
 	if (cx > 0)
@@ -556,12 +697,79 @@ niri_clamp(Monitor *m, struct NiriGeom *g, int cx)
 	return cx;
 }
 
+/* lay out the windows of a column: each one keeps its own height preset, and
+ * the stack as a whole can be taller than the screen and scroll instead; the
+ * heights describe the outer cell, borders included */
+static void
+niri_col_layout(Monitor *m, struct NiriColumn *col, int *off, int *span,
+                int *stack)
+{
+	double frac[NIRI_MAX];
+	double f;
+	int bw, innerh, i;
+
+	innerh = m->wh - 2 * niri_gap(m);
+	if (innerh < 1)
+		innerh = 1;
+	bw = col->n > 0 ? col->c[0]->bw : 0;
+
+	for (i = 0; i < col->n; i++) {
+		f = niri_sizes[col->h[i]];
+		frac[i] = f > 0.0 ? f : niri_sizes[NIRI_HEIGHT_DEFAULT];
+	}
+	niri_fit_spans(frac, col->n, innerh, niri_gap(m), 2 * bw + 1, span);
+	*stack = 0;
+	for (i = 0; i < col->n; i++) {
+		off[i] = *stack;
+		*stack += span[i] + niri_gap(m);
+	}
+	if (col->n > 0)
+		*stack -= niri_gap(m);
+}
+
+/* keep the stack inside its own bounds */
+static void
+niri_clamp_voff(Monitor *m, struct NiriColumn *col)
+{
+	int off[NIRI_MAX], span[NIRI_MAX], stack;
+	int innerh, maxv;
+
+	niri_col_layout(m, col, off, span, &stack);
+	innerh = m->wh - 2 * niri_gap(m);
+	if (innerh < 1)
+		innerh = 1;
+	maxv = stack - innerh;
+	if (maxv < 0)
+		maxv = 0;
+	if (col->voff < 0)
+		col->voff = 0;
+	if (col->voff > maxv)
+		col->voff = maxv;
+}
+
+/* focus the window of a column that is visible closest to its top */
+static void
+niri_focus_first_visible(Monitor *m, int col)
+{
+	struct NiriStrip *s = &niri_state_of(m)->strip;
+	struct NiriColumn *c = &s->col[col];
+	int off[NIRI_MAX], span[NIRI_MAX], stack, k;
+
+	niri_clamp_voff(m, c);
+	niri_col_layout(m, c, off, span, &stack);
+	(void)stack;
+	k = 0;
+	while (k + 1 < c->n && off[k] + span[k] <= c->voff)
+		k++;
+	focus(c->c[k]);
+}
+
 void
 niri(Monitor *m)
 {
 	struct NiriGeom g;
 	struct NiriStrip *s;
-	int cx, i, j, k, rows, vh, vstride, x, fcol, left, right;
+	int cx, i, j, x, fcol, left, right, innerh;
 
 	if (!m)
 		return;
@@ -570,17 +778,20 @@ niri(Monitor *m)
 	niri_geom(m, &g);
 	s = &niri_state_of(m)->strip;
 	cx = niri_offset(m);
+	innerh = m->wh - 2 * g.gap;
+	if (innerh < 1)
+		innerh = 1;
 
 	/* the focused column has to be fully visible */
 	fcol = niri_column_of(m, m->sel);
-	if (fcol >= 0 && g.ncols > 1) {
-		left = m->wx + cx + fcol * g.stride + g.gap; /* outer left edge */
-		right = left + g.cw + 2 * g.bw;              /* outer right edge */
+	if (fcol >= 0) {
+		left = m->wx + cx + g.relx[fcol];     /* outer left edge */
+		right = left + g.cw[fcol] + 2 * g.bw;  /* outer right edge */
 
 		if (left < m->wx + g.gap)
-			cx = -fcol * g.stride;
+			cx = -g.relx[fcol];
 		else if (right > m->wx + m->ww - g.gap)
-			cx = m->ww - g.cw - 2 * g.bw - 2 * g.gap - fcol * g.stride;
+			cx = m->ww - g.gap - (g.relx[fcol] + g.cw[fcol] + 2 * g.bw);
 	}
 
 	cx = niri_clamp(m, &g, cx);
@@ -588,44 +799,39 @@ niri(Monitor *m)
 
 	/* the focused window has to be inside the visible part of its stack */
 	if (fcol >= 0) {
-		for (j = 0; j < s->col[fcol].n; j++)
-			if (s->col[fcol].c[j] == m->sel)
+		int off[NIRI_MAX], span[NIRI_MAX], stack;
+		struct NiriColumn *col = &s->col[fcol];
+
+		niri_clamp_voff(m, col);
+		niri_col_layout(m, col, off, span, &stack);
+		for (j = 0; j < col->n; j++)
+			if (col->c[j] == m->sel)
 				break;
-		if (j < s->col[fcol].n) {
-			rows = s->col[fcol].n < g.rows ? s->col[fcol].n : g.rows;
-			if (s->col[fcol].row > j)
-				s->col[fcol].row = j;
-			else if (j >= s->col[fcol].row + rows)
-				s->col[fcol].row = j - rows + 1;
+		if (j < col->n) {
+			if (off[j] < col->voff)
+				col->voff = off[j];
+			else if (off[j] + span[j] > col->voff + innerh)
+				col->voff = off[j] + span[j] - innerh;
 		}
 	}
 
 	for (i = 0; i < g.ncols; i++) {
-		k = s->col[i].n;
+		int off[NIRI_MAX], span[NIRI_MAX], stack, k = s->col[i].n;
+		struct NiriColumn *col = &s->col[i];
+
 		if (k < 1)
 			continue;
 
-		rows = k < g.rows ? k : g.rows;
+		niri_clamp_voff(m, col);
+		niri_col_layout(m, col, off, span, &stack);
 
-		/* keep the visible part of every stack inside its own windows */
-		if (s->col[i].row < 0)
-			s->col[i].row = 0;
-		if (s->col[i].row > k - rows)
-			s->col[i].row = k - rows;
-
-		/* the rows share the screen height */
-		vh = (m->wh - (rows + 1) * g.gap) / rows - 2 * g.bw;
-		if (vh < 1)
-			vh = 1;
-		vstride = vh + 2 * g.bw + g.gap;
-
-		x = m->wx + cx + i * g.stride + g.gap;
+		x = m->wx + cx + g.relx[i];
 		for (j = 0; j < k; j++) {
 			/* resizeclient() instead of resize(): the windows of the strip
 			 * have to be allowed to sit outside of the window area */
-			resizeclient(s->col[i].c[j], x,
-			             m->wy + g.gap + (j - s->col[i].row) * vstride,
-			             g.cw, vh);
+			resizeclient(col->c[j], x,
+			             m->wy + g.gap + off[j] - col->voff,
+			             g.cw[i], span[j] - 2 * g.bw);
 		}
 	}
 
@@ -633,34 +839,66 @@ niri(Monitor *m)
 	niri_state_put(m);
 }
 
-/* scroll the focused column one window up or down, the columns and their
- * horizontal position stay where they are; the focus is pulled along when it
- * would leave the visible rows */
+/* scroll the focused column up or down to the next window boundary, the
+ * columns and their horizontal position stay where they are; the focus is
+ * pulled along when it would leave the visible area */
 static void
 niri_scroll_column(Monitor *m, int dir)
 {
 	struct NiriStrip *s = &niri_state_of(m)->strip;
-	int fcol = niri_column_of(m, m->sel);
-	int j, rows;
+	struct NiriColumn *col;
+	int fcol = niri_column_of(m, m->sel), j, i, innerh, maxv;
+	int off[NIRI_MAX], span[NIRI_MAX], stack;
 
 	if (fcol < 0)
 		return;
 
-	rows = s->col[fcol].n < niri_rows(m) ? s->col[fcol].n : niri_rows(m);
-	s->col[fcol].row += dir;
-	if (s->col[fcol].row < 0)
-		s->col[fcol].row = 0;
-	if (s->col[fcol].row > s->col[fcol].n - rows)
-		s->col[fcol].row = s->col[fcol].n - rows;
+	col = &s->col[fcol];
+	niri_clamp_voff(m, col);
+	niri_col_layout(m, col, off, span, &stack);
+	innerh = m->wh - 2 * niri_gap(m);
+	if (innerh < 1)
+		innerh = 1;
+	maxv = stack - innerh;
+	if (maxv < 0)
+		maxv = 0;
 
-	for (j = 0; j < s->col[fcol].n; j++)
-		if (s->col[fcol].c[j] == m->sel)
+	if (dir > 0) {
+		j = col->voff;
+		/* the next boundary below the current top */
+		for (i = 0; i < col->n; i++)
+			if (off[i] > j + 1) {
+				col->voff = off[i];
+				break;
+			}
+		if (i == col->n)
+			col->voff = maxv;
+	} else if (dir < 0) {
+		j = col->voff;
+		/* the next boundary above the current top */
+		for (i = col->n - 1; i >= 0; i--)
+			if (off[i] + span[i] < j - 1) {
+				col->voff = off[i];
+				break;
+			}
+		if (i < 0)
+			col->voff = 0;
+	}
+
+	for (j = 0; j < col->n; j++)
+		if (col->c[j] == m->sel)
 			break;
-	if (j < s->col[fcol].n) {
-		if (j < s->col[fcol].row)
-			focus(s->col[fcol].c[s->col[fcol].row]);
-		else if (j >= s->col[fcol].row + rows)
-			focus(s->col[fcol].c[s->col[fcol].row + rows - 1]);
+	if (j < col->n) {
+		/* the focus has to stay inside what is visible */
+		if (off[j] + span[j] <= col->voff || off[j] >= col->voff + innerh) {
+			int k;
+
+			for (k = 0; k < col->n; k++)
+				if (off[k] + span[k] > col->voff && off[k] < col->voff + innerh) {
+					focus(col->c[k]);
+					break;
+				}
+		}
 	}
 
 	restack(m);
@@ -676,7 +914,7 @@ niri_focus_column(Monitor *m, int dir)
 	struct NiriStrip *s = &niri_state_of(m)->strip;
 	struct NiriGeom g;
 	int fcol = niri_column_of(m, m->sel);
-	int col, row, cx;
+	int col, cx;
 
 	if (fcol < 0)
 		return;
@@ -686,17 +924,14 @@ niri_focus_column(Monitor *m, int dir)
 		return;
 
 	niri_geom(m, &g);
-	if (g.ncols > g.cols) {
+	if (g.stripw > m->ww - g.gap) {
 		/* only a strip that does not fit on the screen scrolls */
-		cx = niri_clamp(m, &g, niri_offset(m) - dir * g.stride);
+		cx = niri_clamp(m, &g, niri_offset(m) + g.relx[fcol] - g.relx[col]);
 		niri_set_offset(m, cx);
 	}
 
-	row = s->col[col].row;
-	if (row >= s->col[col].n)
-		row = s->col[col].n - 1;
-
-	focus(s->col[col].c[row]);
+	/* focus the window of the new column that is visible closest to the top */
+	niri_focus_first_visible(m, col);
 	restack(m);
 	niri(m);
 	drawbar(m);
@@ -709,7 +944,7 @@ niri_focus_row(Monitor *m, int dir)
 {
 	struct NiriStrip *s = &niri_state_of(m)->strip;
 	int fcol = niri_column_of(m, m->sel);
-	int j, nj, rows;
+	int j, nj;
 
 	if (fcol < 0)
 		return;
@@ -724,13 +959,6 @@ niri_focus_row(Monitor *m, int dir)
 	if (nj < 0 || nj >= s->col[fcol].n)
 		return;
 
-	rows = s->col[fcol].n < niri_rows(m) ? s->col[fcol].n : niri_rows(m);
-	s->col[fcol].row += dir;
-	if (s->col[fcol].row < 0)
-		s->col[fcol].row = 0;
-	if (s->col[fcol].row > s->col[fcol].n - rows)
-		s->col[fcol].row = s->col[fcol].n - rows;
-
 	focus(s->col[fcol].c[nj]);
 	restack(m);
 	niri(m);
@@ -742,7 +970,6 @@ void
 niri_scroll(const Arg *arg)
 {
 	struct NiriGeom g;
-	struct NiriStrip *s;
 	Monitor *m = selmon;
 	int dx = 0, cx, col;
 
@@ -772,7 +999,7 @@ niri_scroll(const Arg *arg)
 
 	niri_sync(m);
 	niri_geom(m, &g);
-	if (g.ncols < 2)
+	if (g.stripw <= m->ww - g.gap)
 		return;
 
 	cx = niri_clamp(m, &g, niri_offset(m) - dx);
@@ -781,15 +1008,16 @@ niri_scroll(const Arg *arg)
 	/* the focus follows the view, it has to happen before the layout runs
 	 * again, otherwise the new view would be scrolled back to the column
 	 * that is still focused */
-	col = (m->ww / 2 - cx) / g.stride;
-	if (col < 0)
-		col = 0;
-	if (col >= g.ncols)
-		col = g.ncols - 1;
+	{
+		int center = m->ww / 2 - cx, i;
 
-	s = &niri_state_of(m)->strip;
-	if (s->col[col].n > 0 && s->col[col].c[0] != m->sel)
-		focus(s->col[col].c[0]);
+		col = 0;
+		for (i = 1; i < g.ncols; i++)
+			if (g.relx[i] <= center)
+				col = i;
+	}
+
+	niri_focus_first_visible(m, col);
 	restack(m);
 	niri(m);
 	drawbar(m);
@@ -839,10 +1067,13 @@ niri_consume(Monitor *m)
 	/* the top window of the next column moves to the bottom of this one */
 	k = s->col[fcol].n;
 	s->col[fcol].c[k] = s->col[fcol + 1].c[0];
+	s->col[fcol].h[k] = s->col[fcol + 1].h[0];
 	s->col[fcol].n++;
 
-	for (i = 0; i + 1 < s->col[fcol + 1].n; i++)
+	for (i = 0; i + 1 < s->col[fcol + 1].n; i++) {
 		s->col[fcol + 1].c[i] = s->col[fcol + 1].c[i + 1];
+		s->col[fcol + 1].h[i] = s->col[fcol + 1].h[i + 1];
+	}
 	s->col[fcol + 1].n--;
 
 	if (s->col[fcol + 1].n == 0)
@@ -864,15 +1095,24 @@ niri_expel(Monitor *m)
 	for (j = 0; j < s->col[fcol].n; j++)
 		if (s->col[fcol].c[j] == c)
 			break;
-	for (i = j; i + 1 < s->col[fcol].n; i++)
-		s->col[fcol].c[i] = s->col[fcol].c[i + 1];
-	s->col[fcol].n--;
+	{
+		int h = s->col[fcol].h[j];
 
-	for (i = s->ncol; i > fcol + 1; i--)
-		s->col[i] = s->col[i - 1];
-	s->col[fcol + 1].n = 1;
-	s->col[fcol + 1].c[0] = c;
-	s->ncol++;
+		for (i = j; i + 1 < s->col[fcol].n; i++) {
+			s->col[fcol].c[i] = s->col[fcol].c[i + 1];
+			s->col[fcol].h[i] = s->col[fcol].h[i + 1];
+		}
+		s->col[fcol].n--;
+
+		for (i = s->ncol; i > fcol + 1; i--)
+			s->col[i] = s->col[i - 1];
+		s->col[fcol + 1].n = 1;
+		s->col[fcol + 1].width = NIRI_SIZE_DEFAULT;
+		s->col[fcol + 1].voff = 0;
+		s->col[fcol + 1].c[0] = c;
+		s->col[fcol + 1].h[0] = h;
+		s->ncol++;
+	}
 }
 
 /* grow or shrink the focused column, incnmaster (MODKEY+i / MODKEY+d) */
@@ -898,53 +1138,45 @@ niri_incnmaster(const Arg *arg)
 	arrange(m);
 }
 
-/* change how many columns share the screen, one step per keypress, the zoom is
- * kept in mfact so setmfact() stores it per tag */
+/* change the width of the focused column, one step per keypress; it wraps
+ * through third, half, two thirds and full */
 void
 niri_zoom(const Arg *arg)
 {
 	Monitor *m = selmon;
-	Arg a;
-	float f;
-	int cols;
 
 	if (!m)
 		return;
 
 	if (m->lt[m->sellt]->arrange != niri) {
 		/* another layout is active, keep the usual master factor */
+		Arg a;
 		a.f = arg->i > 0 ? -0.05 : 0.05;
 		setmfact(&a);
 		return;
 	}
 
-	cols = niri_visible(m) + arg->i;
-	if (cols < 1)
-		cols = 1;
-	if (cols > NIRI_MAX)
-		cols = NIRI_MAX;
+	niri_sync(m);
+	{
+		struct NiriStrip *s = &niri_state_of(m)->strip;
+		int c = niri_column_of(m, m->sel);
 
-	/* a column is as wide as the screen allows, one column of them is full;
-	 * stay clear of setmfact()'s 0.05..0.95 bounds so the float round trip
-	 * through its absolute mode cannot be rejected */
-	f = 1.0 / cols;
-	if (f > 0.90)
-		f = 0.90;
-	if (f < 0.06)
-		f = 0.06;
-
-	/* absolute mode of setmfact() */
-	a.f = 1.0 + f;
-	setmfact(&a);
+		if (c < 0)
+			return;
+		if (arg->i > 0)
+			s->col[c].width = (s->col[c].width + NIRI_NSIZES - 1) % NIRI_NSIZES;
+		else
+			s->col[c].width = (s->col[c].width + 1) % NIRI_NSIZES;
+	}
+	arrange(m);
 }
 
-/* change how many stacked windows share the screen height, one step per
- * keypress, kept per tag in this file */
+/* change the height of the focused window, one step per keypress; it wraps
+ * through third, half, two thirds and full */
 void
 niri_vzoom(const Arg *arg)
 {
 	Monitor *m = selmon;
-	int rows;
 
 	if (!m)
 		return;
@@ -952,13 +1184,23 @@ niri_vzoom(const Arg *arg)
 	if (m->lt[m->sellt]->arrange != niri)
 		return;
 
-	rows = niri_rows(m) + arg->i;
-	if (rows < 1)
-		rows = 1;
-	if (rows > NIRI_MAX)
-		rows = NIRI_MAX;
+	niri_sync(m);
+	{
+		struct NiriStrip *s = &niri_state_of(m)->strip;
+		int c = niri_column_of(m, m->sel), j;
 
-	niri_state_of(m)->visy = rows;
+		if (c < 0)
+			return;
+		for (j = 0; j < s->col[c].n; j++)
+			if (s->col[c].c[j] == m->sel)
+				break;
+		if (j >= s->col[c].n)
+			return;
+		if (arg->i > 0)
+			s->col[c].h[j] = (s->col[c].h[j] + NIRI_NSIZES - 1) % NIRI_NSIZES;
+		else
+			s->col[c].h[j] = (s->col[c].h[j] + 1) % NIRI_NSIZES;
+	}
 	arrange(m);
 }
 

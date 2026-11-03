@@ -175,10 +175,10 @@ static const Key keys[] = {
 	{ MODKEY,                       XK_l,      niri_focus,     {.i = 1 } }, /* right */
 	{ MODKEY,                       XK_i,      niri_incnmaster, {.i = +1 } },
 	{ MODKEY,                       XK_d,      niri_incnmaster, {.i = -1 } },
-	{ MODKEY|ShiftMask,             XK_h,      niri_zoom,      {.i = +1 } }, /* more columns */
-	{ MODKEY|ShiftMask,             XK_l,      niri_zoom,      {.i = -1 } }, /* fewer columns */
-	{ MODKEY|ShiftMask,             XK_k,      niri_vzoom,     {.i = +1 } }, /* more rows */
-	{ MODKEY|ShiftMask,             XK_j,      niri_vzoom,     {.i = -1 } }, /* fewer rows */
+	{ MODKEY|ShiftMask,             XK_h,      niri_zoom,      {.i = +1 } }, /* narrower column */
+	{ MODKEY|ShiftMask,             XK_l,      niri_zoom,      {.i = -1 } }, /* wider column */
+	{ MODKEY|ShiftMask,             XK_k,      niri_vzoom,     {.i = +1 } }, /* shorter window */
+	{ MODKEY|ShiftMask,             XK_j,      niri_vzoom,     {.i = -1 } }, /* taller window */
 	{ MODKEY,                       XK_Return, swapmaster,     {0} }, /* vxwm has no zoom(); swapmaster is the equivalent of dwm's zoom */
 	{ MODKEY,                       XK_Tab,    view,           {0} },
 	{ MODKEY|ShiftMask,             XK_c,      killclient,     {0} },
