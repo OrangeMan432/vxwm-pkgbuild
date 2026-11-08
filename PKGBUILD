@@ -51,6 +51,6 @@ md5sums=('SKIP'
          '6c1152a2522a5d618d6483987c6e2220'
          'fc937912b69dacc73bf562509ac1892b'
          '4b137e92e96ff711a3ee7fd14f1dd3a6'
-         'd56a9415580f15507adc82cfd7a12a35'
+         '969e2e9eeb971a0959e6c66519387ec5'
          'a7e862491c1e94887913a2e47755eb3a'
          'd75cd451fa15bff5e777acc0d7cd64d9')

@@ -805,7 +805,7 @@ niri(Monitor *m)
 		right = left + g.cw[fcol] + 2 * g.bw;  /* outer right edge */
 
 		if (left < m->wx + g.gap)
-			cx = -g.relx[fcol];
+			cx = g.gap - g.relx[fcol];
 		else if (right > m->wx + m->ww - g.gap)
 			cx = m->ww - g.gap - (g.relx[fcol] + g.cw[fcol] + 2 * g.bw);
 	}
