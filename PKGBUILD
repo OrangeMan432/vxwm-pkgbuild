@@ -8,7 +8,7 @@ license=('MIT')
 options=(zipman)
 depends=('libx11' 'libxinerama')
 install=vxwm.install
-_patches=('vxwm-xrdb-fix.patch' 'vxwm-pointer-focus.patch')
+_patches=('vxwm-xrdb-fix.patch' 'vxwm-pointer-focus.patch' 'vxwm-layoutanim.patch')
 source=(git+https://github.com/orangeman432/vxwm.git
 	vxwm.desktop
 	start-vxwm
@@ -49,8 +49,9 @@ package() {
 md5sums=('SKIP'
          'f187782edcd0e11ddc17fa5802c38c4a'
          '6c1152a2522a5d618d6483987c6e2220'
-         'fc937912b69dacc73bf562509ac1892b'
-         '4b137e92e96ff711a3ee7fd14f1dd3a6'
+         '72df8d44a269435915cb0a5c97e48a9b'
+         '69efe62020b9d7c33760deaf590ca720'
          '969e2e9eeb971a0959e6c66519387ec5'
          'a7e862491c1e94887913a2e47755eb3a'
-         'd75cd451fa15bff5e777acc0d7cd64d9')
+         'd75cd451fa15bff5e777acc0d7cd64d9'
+         '5c723e2daa6e1a5743e28cb5b26f5c60')

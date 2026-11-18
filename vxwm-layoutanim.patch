@@ -1,0 +1,112 @@
+diff --git vxwm.c vxwm.c
+index e9298a8..e3eba30 100644
+--- vxwm.c
++++ vxwm.c
+@@ -167,6 +167,7 @@ typedef struct {
+ typedef struct {
+ 	const char *symbol;
+ 	void (*arrange)(Monitor *);
++	int noanim; /* suppress compositor window animations in this layout */
+ } Layout;
+ 
+ #if INFINITE_TAGS
+@@ -1488,6 +1489,34 @@ killclient(const Arg *arg)
+ 	}
+ }
+ 
++static Atom noanim_atom;
++
++/* Publish whether the client's current layout suppresses window animations.
++ * The flag goes on the client rather than the root so monitors can keep their
++ * own layout, and so floating windows on a no-animation layout are covered
++ * too. Called before arranging or mapping, so the compositor sees the new
++ * value before any geometry or map events it will animate. */
++static void
++layoutanim_set(Client *c)
++{
++	long noanim;
++
++	if (!noanim_atom)
++		noanim_atom = XInternAtom(dpy, "_VXWM_NO_ANIM", False);
++	noanim = c->mon->lt[c->mon->sellt]->noanim;
++	XChangeProperty(dpy, c->win, noanim_atom, XA_CARDINAL, 32,
++		PropModeReplace, (unsigned char *)&noanim, 1);
++}
++
++static void
++layoutanim_publish(Monitor *m)
++{
++	Client *c;
++
++	for (c = m->clients; c; c = c->next)
++		layoutanim_set(c);
++}
++
+ void
+ manage(Window w, XWindowAttributes *wa)
+ {
+@@ -1563,6 +1592,7 @@ manage(Window w, XWindowAttributes *wa)
+ 		XRaiseWindow(dpy, c->win);
+ 	attach(c);
+ 	attachstack(c);
++	layoutanim_set(c);
+ 	#if EWMH_TAGS
+ 	updatewmdesktop(c);
+ 	#endif
+@@ -2102,6 +2132,7 @@ sendmon(Client *c, Monitor *m)
+ 	c->tags = m->tagset[m->seltags]; /* assign tags of target monitor */
+ 	attach(c);
+ 	attachstack(c);
++	layoutanim_set(c);
+ #if PRESERVE_ON_RESTART
+ 	preserveonrestart_update(c);
+ #endif
+@@ -2227,6 +2258,7 @@ setlayout(const Arg *arg)
+     }
+ #endif
+ 
++    layoutanim_publish(selmon);
+     strncpy(selmon->ltsymbol, selmon->lt[selmon->sellt]->symbol, sizeof selmon->ltsymbol - 1);
+     selmon->ltsymbol[sizeof selmon->ltsymbol - 1] = '\0';
+     arrange(selmon);
+@@ -2637,6 +2669,7 @@ toggleview(const Arg *arg)
+ 		selmon->sellt = selmon->pertag->sellts[selmon->pertag->curtag];
+ 		selmon->lt[selmon->sellt] = selmon->pertag->ltidxs[selmon->pertag->curtag][selmon->sellt];
+ 		selmon->lt[selmon->sellt^1] = selmon->pertag->ltidxs[selmon->pertag->curtag][selmon->sellt^1];
++		layoutanim_publish(selmon);
+ 
+ 		if (selmon->showbar != selmon->pertag->showbars[selmon->pertag->curtag])
+ 			togglebar(NULL);
+@@ -2885,6 +2918,7 @@ int
+ updategeom(void)
+ {
+ 	int dirty = 0;
++	Monitor *m;
+ 
+ #ifdef XINERAMA
+ 	if (XineramaIsActive(dpy)) {
+@@ -2955,6 +2989,8 @@ updategeom(void)
+ 	if (dirty) {
+ 		selmon = mons;
+ 		selmon = wintomon(root);
++		for (m = mons; m; m = m->next)
++			layoutanim_publish(m);
+ 	}
+ 	return dirty;
+ }
+@@ -3122,6 +3158,7 @@ view(const Arg *arg)
+ 	selmon->sellt = selmon->pertag->sellts[selmon->pertag->curtag];
+ 	selmon->lt[selmon->sellt] = selmon->pertag->ltidxs[selmon->pertag->curtag][selmon->sellt];
+ 	selmon->lt[selmon->sellt^1] = selmon->pertag->ltidxs[selmon->pertag->curtag][selmon->sellt^1];
++	layoutanim_publish(selmon);
+ 
+ 	if (selmon->showbar != selmon->pertag->showbars[selmon->pertag->curtag])
+ 		togglebar(NULL);
+@@ -3195,6 +3232,7 @@ view(const Arg *arg)
+ 	selmon->sellt = selmon->pertag->sellts[selmon->pertag->curtag];
+ 	selmon->lt[selmon->sellt] = selmon->pertag->ltidxs[selmon->pertag->curtag][selmon->sellt];
+ 	selmon->lt[selmon->sellt^1] = selmon->pertag->ltidxs[selmon->pertag->curtag][selmon->sellt^1];
++	layoutanim_publish(selmon);
+ 
+ 	if (selmon->showbar != selmon->pertag->showbars[selmon->pertag->curtag])
+ 		togglebar(NULL);

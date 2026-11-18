@@ -116,7 +116,8 @@ static const int refreshrate = 360;  /* refresh rate (per second) for client mov
 static const Layout layouts[] = {
 	/* symbol     arrange function */
 	{ "><>",      NULL },    /* no layout function means floating behavior */
-	{ "[]=",      tile },    /* first entry is default */
+	{ "[]=",      tile, .noanim = 1 },    /* first entry is default; no compositor animations */
+
 	{ "[M]",      monocle },
 	{ "[>]",      niri },    /* niri-like layout, scrolls columns and stacks */
 };
