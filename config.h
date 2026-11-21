@@ -6,12 +6,12 @@
 static const unsigned int borderpx  = 3;        /* border pixel of windows */
 static const unsigned int snap      = 0;        /* snap pixel */
 static const int showbar            = 1;        /* 0 means no bar */
-static const int topbar             = 1;        /* 0 means bottom bar */
+static const int topbar             = 0;        /* 0 means bottom bar */
 #if DUALSTATUS
-static const int showbotbar         = 1;        /* 0 means no bottom bar */
+static const int showbotbar         = 0;        /* 0 means no bottom bar */
 #endif
-static const char *fonts[]          = { "JetBrains Mono Nerd Font:size=16" };
-static const char dmenufont[]       = "JetBrains Mono Nerd Font:size=16";
+static const char *fonts[]          = { "Jetbrains Mono Nerd Font:size=16" };
+static const char dmenufont[]       = "Jetbrains Mono Nerd Font:size=16";
 #define COORDINATES_STYLE "[x%d y%d]" /* The style of coordinates displayed in bar, do not remove %d. */
 
 /* static unsigned int baralpha = OPAQUE; */
@@ -117,7 +117,6 @@ static const Layout layouts[] = {
 	/* symbol     arrange function */
 	{ "><>",      NULL },    /* no layout function means floating behavior */
 	{ "[]=",      tile, .noanim = 1 },    /* first entry is default; no compositor animations */
-
 	{ "[M]",      monocle },
 	{ "[>]",      niri },    /* niri-like layout, scrolls columns and stacks */
 };
@@ -201,8 +200,8 @@ static const Key keys[] = {
 	{ MODKEY|ShiftMask,             XK_comma,  tagmon,         {.i = -1 } },
 	{ MODKEY|ShiftMask,             XK_period, tagmon,         {.i = +1 } },
 	{ 0, XF86XK_AudioMute,                     spawn,          SHCMD("pamixer -t; pkill -P $(cat /tmp/statusbar.pid) sleep") },
-	{ 0, XF86XK_AudioRaiseVolume,              spawn,          SHCMD("pamixer -i 5; pkill -P $(cat /tmp/statusbar.pid) sleep") },
-	{ 0, XF86XK_AudioLowerVolume,              spawn,          SHCMD("pamixer -d 5; pkill -P $(cat /tmp/statusbar.pid) sleep") },
+	{ 0, XF86XK_AudioRaiseVolume,              spawn,          SHCMD("pamixer -i 5; notify-send volume $(pamixer --get-volume) --replace-id 1000 --expire-time 1000; pkill -P $(cat /tmp/statusbar.pid) sleep") },
+	{ 0, XF86XK_AudioLowerVolume,              spawn,          SHCMD("pamixer -d 5; notify-send volume $(pamixer --get-volume) --replace-id 1000 --expire-time 1000; pkill -P $(cat /tmp/statusbar.pid) sleep") },
 	{ 0, XF86XK_AudioPlay,                     spawn,          SHCMD("playerctl play-pause") },
 	{ 0, XF86XK_AudioPrev,                     spawn,          SHCMD("playerctl previous") },
 	{ 0, XF86XK_AudioNext,                     spawn,          SHCMD("playerctl next") },
