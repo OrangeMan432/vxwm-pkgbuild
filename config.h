@@ -199,7 +199,7 @@ static const Key keys[] = {
 	{ MODKEY,                       XK_period, focusmon,       {.i = +1 } },
 	{ MODKEY|ShiftMask,             XK_comma,  tagmon,         {.i = -1 } },
 	{ MODKEY|ShiftMask,             XK_period, tagmon,         {.i = +1 } },
-	{ 0, XF86XK_AudioMute,                     spawn,          SHCMD("pamixer -t; pkill -P $(cat /tmp/statusbar.pid) sleep") },
+	{ 0, XF86XK_AudioMute,                     spawn,          SHCMD("pamixer -t; notify-send volume \"muted: $(pamixer --get-mute)\" --replace-id 1000 --expire-time 1000; pkill -P $(cat /tmp/statusbar.pid) sleep") },
 	{ 0, XF86XK_AudioRaiseVolume,              spawn,          SHCMD("pamixer -i 5; notify-send volume $(pamixer --get-volume) --replace-id 1000 --expire-time 1000; pkill -P $(cat /tmp/statusbar.pid) sleep") },
 	{ 0, XF86XK_AudioLowerVolume,              spawn,          SHCMD("pamixer -d 5; notify-send volume $(pamixer --get-volume) --replace-id 1000 --expire-time 1000; pkill -P $(cat /tmp/statusbar.pid) sleep") },
 	{ 0, XF86XK_AudioPlay,                     spawn,          SHCMD("playerctl play-pause") },
